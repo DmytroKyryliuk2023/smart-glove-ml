@@ -1,18 +1,21 @@
 import base64
+from dataclasses import dataclass
 import io
 import joblib
+
+from fastapi import FastAPI, HTTPException, status
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential, save_model, load_model
 from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
-from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel
 
 
 class Models:
-    class Model(BaseModel):
+    @dataclass
+    class Model():
         sequence_length: int
         expected_columns: int
         model: Sequential
@@ -72,26 +75,20 @@ class Models:
 class ModelSerializer:
     @staticmethod
     def encode(model: Models.Model) -> Models.EncodedModel:
-        # Серіалізація моделі Keras
-        model_buffer = io.BytesIO()
-        save_model(model.model, model_buffer, save_format='h5')
-        model_buffer.seek(0)
-        model_encoded = base64.b64encode(model_buffer.read()).decode('utf-8')
-        model_buffer.close()
+        with io.BytesIO() as model_buffer:
+            save_model(model.model, model_buffer)
+            model_buffer.seek(0)
+            model_encoded = base64.b64encode(model_buffer.read()).decode('utf-8')
         
-        # Серіалізація scaler
-        scaler_buffer = io.BytesIO()
-        joblib.dump(model.scaler, scaler_buffer, save_format='pkl')
-        scaler_buffer.seek(0)
-        scaler_encoded = base64.b64encode(scaler_buffer.read()).decode('utf-8')
-        scaler_buffer.close()
+        with io.BytesIO() as scaler_buffer:
+            joblib.dump(model.scaler, scaler_buffer)
+            scaler_buffer.seek(0)
+            scaler_encoded = base64.b64encode(scaler_buffer.read()).decode('utf-8')
         
-        # Серіалізація класів
-        classes_buffer = io.BytesIO()
-        np.save(classes_buffer, model.classes, save_format='npy')
-        classes_buffer.seek(0)
-        classes_encoded = base64.b64encode(classes_buffer.read()).decode('utf-8')
-        classes_buffer.close()
+        with io.BytesIO() as classes_buffer:
+            np.save(classes_buffer, model.classes)
+            classes_buffer.seek(0)
+            classes_encoded = base64.b64encode(classes_buffer.read()).decode('utf-8')
 
         return Models.EncodedModel(
             sequence_length=model.sequence_length,
@@ -103,23 +100,17 @@ class ModelSerializer:
     
     @staticmethod
     def decode(model: Models.EncodedModel) -> Models.Model:
-        # Десеріалізація моделі Keras
-        model_buffer = io.BytesIO(base64.b64decode(model.model))
-        model_buffer.seek(0)
-        keras_model = load_model(model_buffer)
-        model_buffer.close()
-        
-        # Десеріалізація scaler
-        scaler_buffer = io.BytesIO(base64.b64decode(model.scaler))
-        scaler_buffer.seek(0)
-        scaler = joblib.load(scaler_buffer)
-        scaler_buffer.close()
-        
-        # Десеріалізація класів
-        classes_buffer = io.BytesIO(base64.b64decode(model.classes))
-        classes_buffer.seek(0)
-        classes = np.load(classes_buffer, allow_pickle=True)
-        classes_buffer.close()
+        with io.BytesIO(base64.b64decode(model.model)) as model_buffer:
+            model_buffer.seek(0)
+            keras_model = load_model(model_buffer)
+            
+        with io.BytesIO(base64.b64decode(model.scaler)) as scaler_buffer:
+            scaler_buffer.seek(0)
+            scaler = joblib.load(scaler_buffer)
+            
+        with io.BytesIO(base64.b64decode(model.classes)) as classes_buffer:
+            classes_buffer.seek(0)
+            classes = np.load(classes_buffer, allow_pickle=True)
 
         return Models.Model(
             sequence_length=model.sequence_length,
@@ -140,15 +131,110 @@ def train_model(data: dict):
     Ендпоінт для тренування нової моделі.
     Отримує дані (наприклад, жести), тренує модель і повертає її.
     """
+    if not data:
+        raise HTTPException(400, "Empty training data")
     
     model = Models.Model(
-        sequence_length=100,
-        expected_columns=10,
-        model=Sequential(),
-        scaler=MinMaxScaler(),
-        classes=np.array(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"])
+        sequence_length=50,
+        expected_columns=18,
+        model=None,
+        scaler=None,
+        classes=None
     )
     
+    samples = []
+    labels = []
+
+    # -------------------------------
+    # 1. Зчитування JSON
+    # -------------------------------
+    for label, sequences in data.items():
+        for seq in sequences:
+            df = pd.DataFrame(seq)
+
+            # Перевірка кількості колонок
+            if df.shape[1] != model.expected_columns:
+                print(f"Пропускаю {label} — неправильна кількість колонок {df.shape[1]}")
+                continue
+
+            # Ресемплінг
+            df_resampled = Models.resample_sequence(df, model.sequence_length)
+
+            if df_resampled.shape != (model.sequence_length , model.expected_columns):
+                print(f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}")
+                continue
+
+            samples.append(df_resampled.values.astype(float))
+            labels.append(label)
+
+    samples = np.array(samples)
+    labels = np.array(labels)
+    
+    # -------------------------------
+    # 2. Кодування міток
+    # -------------------------------
+    encoder = LabelEncoder()
+    y = encoder.fit_transform(labels)
+    model.classes = encoder.classes_
+
+    # -------------------------------
+    # 3. Stratified train/test split
+    # -------------------------------
+    X_train, X_test, y_train, y_test = train_test_split(
+        samples, y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y  # забезпечує правильне розділення по класах
+    )
+
+    # -------------------------------
+    # 4. Масштабування
+    # -------------------------------
+    model.scaler = MinMaxScaler(feature_range=(-1, 1))
+    N_train, T, F = X_train.shape
+    N_test = X_test.shape[0]
+
+    X_train_2d = X_train.reshape(-1, F)
+    X_test_2d = X_test.reshape(-1, F)
+
+    model.scaler.fit(X_train_2d)
+    X_train_scaled = model.scaler.transform(X_train_2d).reshape(N_train, T, F)
+    X_test_scaled = np.clip(model.scaler.transform(X_test_2d).reshape(N_test, T, F), -1, 1)
+
+    # -------------------------------
+    # 5. Модель LSTM(32) з Input шаром
+    # -------------------------------
+    model.model = Sequential([
+        Input(shape=(T, F)),       # Забирає попередження input_shape
+        LSTM(32, return_sequences=False),  # 32 юніти
+        Dropout(0.3),               # трохи більше регуляризації
+        Dense(64, activation='relu'),  # Dense шар перед виходом
+        Dropout(0.2),
+        Dense(len(np.unique(y)), activation='softmax')  # вихідний шар
+    ])
+
+    model.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+    # -------------------------------
+    # 6. Навчання
+    # -------------------------------
+    history = model.model.fit(
+        X_train_scaled, y_train,
+        validation_data=(X_test_scaled, y_test),
+        epochs=50,
+        batch_size=4,
+        verbose=1
+    )
+
+    # -------------------------------
+    # 7. Оцінка
+    # -------------------------------
+    test_loss, test_accuracy = model.model.evaluate(X_test_scaled, y_test, verbose=0)
+    print(f"Точність моделі на тестових даних: {test_accuracy * 100:.2f}%")
+    
+    # -------------------------------
+    # 8. Кодування
+    # -------------------------------
     encoded_model = ModelSerializer.encode(model)
     
     return encoded_model
@@ -175,6 +261,11 @@ def init_model(model: Models.EncodedModel):
 
 @app.post("/predict")
 def predict_gesture(data: dict):
+    """
+    Ендпоінт для передбачення жесту.
+    Використовує поточну модель (current_model) для передбачення
+    і повертає результат.
+    """
     if not current_model:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -223,5 +314,3 @@ def predict_gesture(data: dict):
         "prediction": predicted_label,
         "confidence": float(confidence)
     }
-
-

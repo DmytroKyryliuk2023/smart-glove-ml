@@ -1,0 +1,7 @@
+fastapi==0.135.3
+joblib==1.5.3
+numpy==2.4.4
+pandas==3.0.2
+pydantic==2.12.5
+scikit_learn==1.8.0
+tensorflow==2.20.0

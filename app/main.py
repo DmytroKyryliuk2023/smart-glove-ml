@@ -2,6 +2,7 @@ import base64
 from dataclasses import dataclass
 import io
 import joblib
+import tempfile
 
 from fastapi import FastAPI, HTTPException, status
 import numpy as np
@@ -75,11 +76,13 @@ class Models:
 class ModelSerializer:
     @staticmethod
     def encode(model: Models.Model) -> Models.EncodedModel:
-        with io.BytesIO() as model_buffer:
-            save_model(model.model, model_buffer)
-            model_buffer.seek(0)
-            model_encoded = base64.b64encode(model_buffer.read()).decode('utf-8')
+        # Використовуємо тимчасовий файл для моделі
+        with tempfile.NamedTemporaryFile(suffix='.keras', delete=True) as tmp_file:
+            save_model(model.model, tmp_file.name)  # зберігаємо у файл
+            tmp_file.seek(0)
+            model_encoded = base64.b64encode(tmp_file.read()).decode('utf-8')
         
+        # Scalers та classes залишаються в BytesIO (вони працюють нормально)
         with io.BytesIO() as scaler_buffer:
             joblib.dump(model.scaler, scaler_buffer)
             scaler_buffer.seek(0)
@@ -100,16 +103,16 @@ class ModelSerializer:
     
     @staticmethod
     def decode(model: Models.EncodedModel) -> Models.Model:
-        with io.BytesIO(base64.b64decode(model.model)) as model_buffer:
-            model_buffer.seek(0)
-            keras_model = load_model(model_buffer)
-            
+        # Для декодування теж використовуємо тимчасовий файл
+        with tempfile.NamedTemporaryFile(suffix='.keras', delete=True) as tmp_file:
+            tmp_file.write(base64.b64decode(model.model))
+            tmp_file.flush()
+            keras_model = load_model(tmp_file.name)
+        
         with io.BytesIO(base64.b64decode(model.scaler)) as scaler_buffer:
-            scaler_buffer.seek(0)
             scaler = joblib.load(scaler_buffer)
-            
+        
         with io.BytesIO(base64.b64decode(model.classes)) as classes_buffer:
-            classes_buffer.seek(0)
             classes = np.load(classes_buffer, allow_pickle=True)
 
         return Models.Model(

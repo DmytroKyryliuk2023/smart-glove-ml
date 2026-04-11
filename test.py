@@ -7,7 +7,7 @@ def main():
     data_folder = Path("data")
     train_file = data_folder / "gestures_merged.json"
     test_file = data_folder / "excuse-me.json"
-    model_file = "trained_model.json"
+    model_file = data_folder / "trained_model.json"
     
     # Перевірка існування файлів
     if not train_file.exists():

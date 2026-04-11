@@ -11,11 +11,11 @@ def main():
     
     # Перевірка існування файлів
     if not train_file.exists():
-        print(f"❌ Файл тренування не знайдено: {train_file}")
+        print(f"Файл тренування не знайдено: {train_file}")
         return
     
     if not test_file.exists():
-        print(f"❌ Файл тестування не знайдено: {test_file}")
+        print(f"Файл тестування не знайдено: {test_file}")
         return
     
     base_url = "http://localhost:8000"

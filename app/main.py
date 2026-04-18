@@ -29,7 +29,15 @@ class Models:
         model: str
         scaler: str
         classes: str
-    
+        
+    class IdentifiedModel(BaseModel):
+        user_id: str
+        model: "Models.EncodedModel"
+        
+    class GestureData(BaseModel):
+        user_id: str
+        gesture_data: list[list[float]]
+        
     @staticmethod
     def resample_sequence(df: pd.DataFrame, target_length: int) -> pd.DataFrame:
         """
@@ -128,8 +136,8 @@ app = FastAPI()
 current_model: Models.Model = None
 
 
-@app.post("/train")
-def train_model(data: dict):
+@app.post("/train", response_model=Models.EncodedModel)
+def train_model(data: dict[str, list[list[list[float]]]]):
     """
     Ендпоінт для тренування нової моделі.
     Отримує дані (наприклад, жести), тренує модель і повертає її.
@@ -244,7 +252,7 @@ def train_model(data: dict):
 
 
 @app.post("/init")
-def init_model(model: Models.EncodedModel):
+def init_model(model: Models.IdentifiedModel):
     """
     Ендпоінт для ініціалізації моделі.
     Отримує модель (наприклад, збережену Keras-модель) і 
@@ -254,7 +262,7 @@ def init_model(model: Models.EncodedModel):
     
     try:
         current_model = ModelSerializer.decode(model)
-        return "Model initialized successfully"
+        return {"message": "Model initialized successfully"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -263,7 +271,7 @@ def init_model(model: Models.EncodedModel):
 
 
 @app.post("/predict")
-def predict_gesture(data: dict):
+def predict_gesture(data: Models.GestureData):
     """
     Ендпоінт для передбачення жесту.
     Використовує поточну модель (current_model) для передбачення

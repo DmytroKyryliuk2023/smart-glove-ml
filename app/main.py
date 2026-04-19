@@ -137,12 +137,12 @@ models: dict[str, Models.Model] = {}
 
 
 @app.post("/train", response_model=Models.EncodedModel)
-def train_model(data: dict[str, list[list[list[float]]]]):
+def train_model(gestures: dict[str, list[list[list[float]]]]):
     """
     Ендпоінт для тренування нової моделі.
     Отримує дані (наприклад, жести), тренує модель і повертає її.
     """
-    if not data:
+    if not gestures:
         raise HTTPException(400, "Empty training data")
     
     model = Models.Model(
@@ -159,7 +159,7 @@ def train_model(data: dict[str, list[list[list[float]]]]):
     # -------------------------------
     # 1. Зчитування JSON
     # -------------------------------
-    for label, sequences in data.items():
+    for label, sequences in gestures.items():
         for seq in sequences:
             df = pd.DataFrame(seq)
 
@@ -229,7 +229,7 @@ def train_model(data: dict[str, list[list[list[float]]]]):
     # -------------------------------
     # 6. Навчання
     # -------------------------------
-    history = model.model.fit(
+    model.model.fit(
         X_train_scaled, y_train,
         validation_data=(X_test_scaled, y_test),
         epochs=50,

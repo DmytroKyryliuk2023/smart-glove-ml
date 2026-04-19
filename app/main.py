@@ -29,7 +29,15 @@ class Models:
         model: str
         scaler: str
         classes: str
-    
+        
+    class IdentifiedModel(BaseModel):
+        user_id: str
+        model: "Models.EncodedModel"
+        
+    class GestureData(BaseModel):
+        user_id: str
+        gesture_data: list[list[float]]
+        
     @staticmethod
     def resample_sequence(df: pd.DataFrame, target_length: int) -> pd.DataFrame:
         """
@@ -125,16 +133,16 @@ class ModelSerializer:
         
       
 app = FastAPI()
-current_model: Models.Model = None
+models: dict[str, Models.Model] = {}
 
 
-@app.post("/train")
-def train_model(data: dict):
+@app.post("/train", response_model=Models.EncodedModel)
+def train_model(gestures: dict[str, list[list[list[float]]]]):
     """
     Ендпоінт для тренування нової моделі.
     Отримує дані (наприклад, жести), тренує модель і повертає її.
     """
-    if not data:
+    if not gestures:
         raise HTTPException(400, "Empty training data")
     
     model = Models.Model(
@@ -151,7 +159,7 @@ def train_model(data: dict):
     # -------------------------------
     # 1. Зчитування JSON
     # -------------------------------
-    for label, sequences in data.items():
+    for label, sequences in gestures.items():
         for seq in sequences:
             df = pd.DataFrame(seq)
 
@@ -221,7 +229,7 @@ def train_model(data: dict):
     # -------------------------------
     # 6. Навчання
     # -------------------------------
-    history = model.model.fit(
+    model.model.fit(
         X_train_scaled, y_train,
         validation_data=(X_test_scaled, y_test),
         epochs=50,
@@ -244,17 +252,18 @@ def train_model(data: dict):
 
 
 @app.post("/init")
-def init_model(model: Models.EncodedModel):
+def init_model(model: Models.IdentifiedModel):
     """
     Ендпоінт для ініціалізації моделі.
     Отримує модель (наприклад, збережену Keras-модель) і 
     присвоює її змінній current_model.
     """
-    global current_model
+    global models
     
     try:
-        current_model = ModelSerializer.decode(model)
-        return "Model initialized successfully"
+        model_id, model_instance = model.user_id, ModelSerializer.decode(model.model)
+        models[model_id] = model_instance
+        return {"message": "Model initialized successfully"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -263,35 +272,37 @@ def init_model(model: Models.EncodedModel):
 
 
 @app.post("/predict")
-def predict_gesture(data: dict):
+def predict_gesture(gesture: Models.GestureData):
     """
     Ендпоінт для передбачення жесту.
     Використовує поточну модель (current_model) для передбачення
     і повертає результат.
     """
-    if not current_model:
+    user_id, gesture_data = gesture.user_id, gesture.gesture_data
+
+    if user_id not in models:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No model initialized"
         )
         
-    if not data or 'gesture_data' not in data or not data['gesture_data']:
+    if not gesture_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid format or empty 'gesture_data' array"
         )
     
-    sequence_data = data['gesture_data']
+    current_model = models[user_id]
 
     # Перевірка, що кожен запис має правильну кількість ознак (18)
-    if len(sequence_data[0]) != current_model.expected_columns:
+    if len(gesture_data[0]) != current_model.expected_columns:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Expected {current_model.expected_columns} \
-            columns, but got {len(sequence_data[0])}"
+            columns, but got {len(gesture_data[0])}"
         )
 
-    df = pd.DataFrame(sequence_data)
+    df = pd.DataFrame(gesture_data)
     
     # --- Приведення даних до єдиної довжини ---
     df_resampled = Models.resample_sequence(df, current_model.sequence_length)

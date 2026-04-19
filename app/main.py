@@ -133,7 +133,7 @@ class ModelSerializer:
         
       
 app = FastAPI()
-current_model: Models.Model = None
+models: dict[str, Models.Model] = {}
 
 
 @app.post("/train", response_model=Models.EncodedModel)
@@ -258,10 +258,11 @@ def init_model(model: Models.IdentifiedModel):
     Отримує модель (наприклад, збережену Keras-модель) і 
     присвоює її змінній current_model.
     """
-    global current_model
+    global models
     
     try:
-        current_model = ModelSerializer.decode(model)
+        model_id, model_instance = model.user_id, ModelSerializer.decode(model.model)
+        models[model_id] = model_instance
         return {"message": "Model initialized successfully"}
     except Exception as e:
         raise HTTPException(
@@ -271,35 +272,37 @@ def init_model(model: Models.IdentifiedModel):
 
 
 @app.post("/predict")
-def predict_gesture(data: Models.GestureData):
+def predict_gesture(gesture: Models.GestureData):
     """
     Ендпоінт для передбачення жесту.
     Використовує поточну модель (current_model) для передбачення
     і повертає результат.
     """
-    if not current_model:
+    user_id, gesture_data = gesture.user_id, gesture.gesture_data
+
+    if user_id not in models:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No model initialized"
         )
         
-    if not data or 'gesture_data' not in data or not data['gesture_data']:
+    if not gesture_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid format or empty 'gesture_data' array"
         )
     
-    sequence_data = data['gesture_data']
+    current_model = models[user_id]
 
     # Перевірка, що кожен запис має правильну кількість ознак (18)
-    if len(sequence_data[0]) != current_model.expected_columns:
+    if len(gesture_data[0]) != current_model.expected_columns:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Expected {current_model.expected_columns} \
-            columns, but got {len(sequence_data[0])}"
+            columns, but got {len(gesture_data[0])}"
         )
 
-    df = pd.DataFrame(sequence_data)
+    df = pd.DataFrame(gesture_data)
     
     # --- Приведення даних до єдиної довжини ---
     df_resampled = Models.resample_sequence(df, current_model.sequence_length)

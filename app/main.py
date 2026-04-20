@@ -1,10 +1,9 @@
-import base64
 from dataclasses import dataclass
-import io
 import joblib
-import tempfile
 
 from fastapi import FastAPI, HTTPException, status
+from minio import Minio
+from minio.error import S3Error
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
@@ -14,21 +13,16 @@ from tensorflow.keras.models import Sequential, save_model, load_model
 from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
 
 
+SEQUENCE_LENGTH = 50
+EXPECTED_COLUMNS = 18
+
+
 class Models:
     @dataclass
     class Model():
-        sequence_length: int
-        expected_columns: int
         model: Sequential
         scaler: MinMaxScaler
         classes: np.ndarray
-        
-    class EncodedModel(BaseModel):
-        sequence_length: int
-        expected_columns: int
-        model: str
-        scaler: str
-        classes: str
         
     class IdentifiedModel(BaseModel):
         model_id: str
@@ -81,60 +75,96 @@ class Models:
             return df
         
     
-class ModelSerializer:
-    @staticmethod
-    def encode(model: Models.Model) -> Models.EncodedModel:
-        # Використовуємо тимчасовий файл для моделі
-        with tempfile.NamedTemporaryFile(suffix='.keras', delete=True) as tmp_file:
-            save_model(model.model, tmp_file.name)  # зберігаємо у файл
-            tmp_file.seek(0)
-            model_encoded = base64.b64encode(tmp_file.read()).decode('utf-8')
-        
-        # Scalers та classes залишаються в BytesIO (вони працюють нормально)
-        with io.BytesIO() as scaler_buffer:
-            joblib.dump(model.scaler, scaler_buffer)
-            scaler_buffer.seek(0)
-            scaler_encoded = base64.b64encode(scaler_buffer.read()).decode('utf-8')
-        
-        with io.BytesIO() as classes_buffer:
-            np.save(classes_buffer, model.classes)
-            classes_buffer.seek(0)
-            classes_encoded = base64.b64encode(classes_buffer.read()).decode('utf-8')
-
-        return Models.EncodedModel(
-            sequence_length=model.sequence_length,
-            expected_columns=model.expected_columns,
-            model=model_encoded,
-            scaler=scaler_encoded,
-            classes=classes_encoded
-        )
+class ModelMinIOStorage:
+    def __init__(self, minio_client: Minio, bucket_name: str):
+        self.client = minio_client
+        self.bucket_name = bucket_name
     
-    @staticmethod
-    def decode(model: Models.EncodedModel) -> Models.Model:
-        # Для декодування теж використовуємо тимчасовий файл
-        with tempfile.NamedTemporaryFile(suffix='.keras', delete=True) as tmp_file:
-            tmp_file.write(base64.b64decode(model.model))
-            tmp_file.flush()
-            keras_model = load_model(tmp_file.name)
+    def save_model(self, model: Models.Model, model_id: str):
+        """Зберігає модель використовуючи тимчасові файли"""
         
-        with io.BytesIO(base64.b64decode(model.scaler)) as scaler_buffer:
-            scaler = joblib.load(scaler_buffer)
+        import tempfile
+        import os
         
-        with io.BytesIO(base64.b64decode(model.classes)) as classes_buffer:
-            classes = np.load(classes_buffer, allow_pickle=True)
-
-        return Models.Model(
-            sequence_length=model.sequence_length,
-            expected_columns=model.expected_columns,
-            model=keras_model,
-            scaler=scaler,
-            classes=classes
-        )
+        # Створюємо тимчасову директорію для моделі
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Зберігаємо компоненти в тимчасові файли
+            model_path = os.path.join(tmpdir, "model.keras")
+            scaler_path = os.path.join(tmpdir, "scaler.pkl")
+            classes_path = os.path.join(tmpdir, "classes.npy")
+            
+            save_model(model.model, model_path)
+            joblib.dump(model.scaler, scaler_path)
+            np.save(classes_path, model.classes)
+            
+            # Завантажуємо файли в MinIO
+            self.client.fput_object(
+                self.bucket_name,
+                f"model_{model_id}.keras",
+                model_path
+            )
+            self.client.fput_object(
+                self.bucket_name,
+                f"scaler_{model_id}.pkl",
+                scaler_path
+            )
+            self.client.fput_object(
+                self.bucket_name,
+                f"labels_{model_id}.npy",
+                classes_path
+            )
+    
+    def load_model(self, model_id: str) -> Models.Model:
+        """Завантажує модель з MinIO"""
+        
+        import tempfile
+        import os
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Завантажуємо файли з MinIO
+            model_path = os.path.join(tmpdir, "model.keras")
+            scaler_path = os.path.join(tmpdir, "scaler.pkl")
+            classes_path = os.path.join(tmpdir, "classes.npy")
+            
+            self.client.fget_object(
+                self.bucket_name,
+                f"model_{model_id}.keras",
+                model_path
+            )
+            self.client.fget_object(
+                self.bucket_name,
+                f"scaler_{model_id}.pkl",
+                scaler_path
+            )
+            self.client.fget_object(
+                self.bucket_name,
+                f"labels_{model_id}.npy",
+                classes_path
+            )
+            
+            # Завантажуємо компоненти
+            keras_model = load_model(model_path)
+            scaler = joblib.load(scaler_path)
+            classes = np.load(classes_path, allow_pickle=True)
+            
+            return Models.Model(
+                model=keras_model,
+                scaler=scaler,
+                classes=classes
+            )
         
       
 app = FastAPI()
 models: dict[str, Models.Model] = {}
-
+storage = ModelMinIOStorage(
+    Minio(
+        "localhost:9000",
+        access_key="minioadmin",
+        secret_key="minioadminpassword",
+        secure=False
+    ),
+    "gesture-models"
+)
 
 @app.post("/train", response_model=Models.EncodedModel)
 def train_model(gestures: dict[str, list[list[list[float]]]]):

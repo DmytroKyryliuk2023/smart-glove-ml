@@ -31,11 +31,11 @@ class Models:
         classes: str
         
     class IdentifiedModel(BaseModel):
-        user_id: str
+        model_id: str
         model: "Models.EncodedModel"
         
     class GestureData(BaseModel):
-        user_id: str
+        model_id: str
         gesture_data: list[list[float]]
         
     @staticmethod
@@ -258,10 +258,9 @@ def init_model(model: Models.IdentifiedModel):
     Отримує модель (наприклад, збережену Keras-модель) і 
     присвоює її змінній current_model.
     """
-    global models
     
     try:
-        model_id, model_instance = model.user_id, ModelSerializer.decode(model.model)
+        model_id, model_instance = model.model_id, ModelSerializer.decode(model.model)
         models[model_id] = model_instance
         return {"message": "Model initialized successfully"}
     except Exception as e:
@@ -278,9 +277,9 @@ def predict_gesture(gesture: Models.GestureData):
     Використовує поточну модель (current_model) для передбачення
     і повертає результат.
     """
-    user_id, gesture_data = gesture.user_id, gesture.gesture_data
+    model_id, gesture_data = gesture.model_id, gesture.gesture_data
 
-    if user_id not in models:
+    if model_id not in models:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No model initialized"
@@ -292,7 +291,7 @@ def predict_gesture(gesture: Models.GestureData):
             detail="Invalid format or empty 'gesture_data' array"
         )
     
-    current_model = models[user_id]
+    current_model = models[model_id]
 
     # Перевірка, що кожен запис має правильну кількість ознак (18)
     if len(gesture_data[0]) != current_model.expected_columns:

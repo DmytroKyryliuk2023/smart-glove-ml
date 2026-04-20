@@ -7,7 +7,7 @@ def main():
     data_folder = Path("data")
     train_file = data_folder / "gestures_merged.json"
     test_file = data_folder / "excuse-me.json"
-    model_file = data_folder / "trained_model.json"
+    model_file = data_folder / "test_model.json"
     
     # Перевірка існування файлів
     if not train_file.exists():
@@ -30,9 +30,12 @@ def main():
         print(f"Помилка тренування: {response.status_code}")
         return
     
+    test_model = {"model_id": "dmytrok"}
+    test_model["model"] = response.json()
+    
     # Зберігаємо модель
     with open(model_file, 'w', encoding='utf-8') as f:
-        json.dump(response.json(), f)
+        json.dump(test_model, f)
     print("Модель натренована та збережена")
     
     # Крок 2: Ініціалізація

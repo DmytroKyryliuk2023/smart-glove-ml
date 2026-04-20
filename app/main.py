@@ -258,7 +258,6 @@ def init_model(model: Models.IdentifiedModel):
     Отримує модель (наприклад, збережену Keras-модель) і 
     присвоює її змінній current_model.
     """
-    global models
     
     try:
         model_id, model_instance = model.model_id, ModelSerializer.decode(model.model)

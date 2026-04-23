@@ -1,161 +1,27 @@
-from dataclasses import dataclass
-import joblib
+import json
 
 from fastapi import FastAPI, HTTPException, status
+from faststream.rabbit.fastapi import RabbitRouter
+import httpx
 from minio import Minio
 from minio.error import S3Error
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential, save_model, load_model
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
+
+import models as Models
+from storages import ModelMinIOStorage
 
 
 SEQUENCE_LENGTH = 50
 EXPECTED_COLUMNS = 18
 
 
-class Models:
-    @dataclass
-    class Model():
-        model: Sequential
-        scaler: MinMaxScaler
-        classes: np.ndarray
-        
-    class IdentifiedModel(BaseModel):
-        model_id: str
-        model: "Models.EncodedModel"
-        
-    class GestureData(BaseModel):
-        model_id: str
-        gesture_data: list[list[float]]
-        
-    @staticmethod
-    def resample_sequence(df: pd.DataFrame, target_length: int) -> pd.DataFrame:
-        """
-        Приводить кількість рядків у df до target_length.
-        Якщо рядків менше — виконує інтерполяцію.
-        Якщо більше — рівномірно вибирає точки.
-        
-        Args:
-            df: pandas DataFrame із часовими даними (один жест)
-            target_length: бажана кількість точок після вирівнювання
-            
-        Returns:
-            pandas DataFrame тієї ж структури, але з target_length рядків
-        """
-        # Завжди скидаємо індекс для чистої роботи
-        df = df.reset_index(drop=True)
-        current_length = len(df)
-
-        # якщо даних менше - інтерполюємо
-        if current_length < target_length:
-            # Створюємо новий дробовий індекс, що відповідає цільовій довжині
-            new_index = np.linspace(0, current_length - 1, target_length)
-            
-            # Розширюємо DataFrame до нового індексу. 
-            # Точки, що не існували, заповняться значеннями NaN.
-            df_resampled = df.reindex(new_index)
-            
-            # 3. Інтерполюємо (заповнюємо) пропущені значення NaN лінійно
-            df_resampled = df_resampled.interpolate(method='linear')
-            
-            return df_resampled.reset_index(drop=True)
-
-        # якщо даних більше - рівномірно вибираємо точки (цей метод працював правильно)
-        elif current_length > target_length:
-            indices = np.linspace(0, current_length - 1, target_length, dtype=int)
-            df_resampled = df.iloc[indices].reset_index(drop=True)
-            return df_resampled
-
-        # якщо вже рівно — нічого не робимо
-        else:
-            return df
-        
-    
-class ModelMinIOStorage:
-    def __init__(self, minio_client: Minio, bucket_name: str):
-        self.client = minio_client
-        self.bucket_name = bucket_name
-    
-    def save_model(self, model: Models.Model, model_id: str):
-        """Зберігає модель використовуючи тимчасові файли"""
-        
-        import tempfile
-        import os
-        
-        # Створюємо тимчасову директорію для моделі
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Зберігаємо компоненти в тимчасові файли
-            model_path = os.path.join(tmpdir, "model.keras")
-            scaler_path = os.path.join(tmpdir, "scaler.pkl")
-            classes_path = os.path.join(tmpdir, "classes.npy")
-            
-            save_model(model.model, model_path)
-            joblib.dump(model.scaler, scaler_path)
-            np.save(classes_path, model.classes)
-            
-            # Завантажуємо файли в MinIO
-            self.client.fput_object(
-                self.bucket_name,
-                f"model_{model_id}.keras",
-                model_path
-            )
-            self.client.fput_object(
-                self.bucket_name,
-                f"scaler_{model_id}.pkl",
-                scaler_path
-            )
-            self.client.fput_object(
-                self.bucket_name,
-                f"labels_{model_id}.npy",
-                classes_path
-            )
-    
-    def load_model(self, model_id: str) -> Models.Model:
-        """Завантажує модель з MinIO"""
-        
-        import tempfile
-        import os
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Завантажуємо файли з MinIO
-            model_path = os.path.join(tmpdir, "model.keras")
-            scaler_path = os.path.join(tmpdir, "scaler.pkl")
-            classes_path = os.path.join(tmpdir, "classes.npy")
-            
-            self.client.fget_object(
-                self.bucket_name,
-                f"model_{model_id}.keras",
-                model_path
-            )
-            self.client.fget_object(
-                self.bucket_name,
-                f"scaler_{model_id}.pkl",
-                scaler_path
-            )
-            self.client.fget_object(
-                self.bucket_name,
-                f"labels_{model_id}.npy",
-                classes_path
-            )
-            
-            # Завантажуємо компоненти
-            keras_model = load_model(model_path)
-            scaler = joblib.load(scaler_path)
-            classes = np.load(classes_path, allow_pickle=True)
-            
-            return Models.Model(
-                model=keras_model,
-                scaler=scaler,
-                classes=classes
-            )
-        
-      
 app = FastAPI()
-models: dict[str, Models.Model] = {}
+local_models: dict[str, Models.Model] = {}
 storage = ModelMinIOStorage(
     Minio(
         "localhost:9000",
@@ -165,8 +31,47 @@ storage = ModelMinIOStorage(
     ),
     "gesture-models"
 )
+rabbit_router = RabbitRouter()
+app.include_router(rabbit_router)
 
-@app.post("/train", response_model=Models.EncodedModel)
+
+@rabbit_router.subscriber("train_tasks_queue")
+async def train_model(message: dict):
+    """Обробник повідомлень з черги train_tasks_queue"""
+    task_id = message.get("taskId")
+    model_id = message.get("modelId")
+    
+    print(f"Отримано задачу: taskId={task_id}, modelId={model_id}")
+    
+    try:
+        # Отримуємо дані з Java бекенду
+        async with httpx.AsyncClient() as client:
+            url = f"http://java-backend:8080/api/v1/internal/models/{model_id}/training-data"
+            response = await client.get(url)
+            response.raise_for_status()
+            training_data = response.json()
+        
+        print(f"Отримано дані для моделі {model_id}")
+        print(f"Дані: {json.dumps(training_data, indent=2)[:50]}...")  # Логуємо перші 50 символів
+        
+        # Тренування моделі
+        train_model(model_id, training_data)
+        
+        print(f"Модель {model_id} успішно натренована")
+        
+    except Exception as e:
+        if isinstance(e, httpx.HTTPError):
+            print(f"Помилка при отриманні даних: {e}")
+        else:
+            print(f"Помилка тренування моделі {model_id}: {e}")
+        
+        # Звіт про помилку у чергу
+        
+        
+    
+
+
+
 def train_model(gestures: dict[str, list[list[list[float]]]]):
     """
     Ендпоінт для тренування нової моделі.

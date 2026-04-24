@@ -1,10 +1,8 @@
 import joblib
-
-from minio import Minio
-import numpy as np
-from tensorflow.keras.models import save_model, load_model
-
 import models as Models
+import numpy as np
+from minio import Minio
+from tensorflow.keras.models import load_model, save_model
 
 
 class ModelMinIOStorage:
@@ -12,11 +10,11 @@ class ModelMinIOStorage:
         self.client = minio_client
         self.bucket_name = bucket_name
     
-    def save_model(self, model: Models.Model, model_id: str):
+    def save_model(self, model_id: str, model: Models.Model):
         """Зберігає модель використовуючи тимчасові файли"""
         
-        import tempfile
         import os
+        import tempfile
         
         # Створюємо тимчасову директорію для моделі
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -49,8 +47,8 @@ class ModelMinIOStorage:
     def load_model(self, model_id: str) -> Models.Model:
         """Завантажує модель з MinIO"""
         
-        import tempfile
         import os
+        import tempfile
         
         with tempfile.TemporaryDirectory() as tmpdir:
             # Завантажуємо файли з MinIO

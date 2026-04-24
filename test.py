@@ -6,11 +6,14 @@ from contextlib import asynccontextmanager
 
 import aio_pika
 from fastapi import FastAPI
+import requests
 
 RABBIT_URL = "amqp://guest:guest@localhost:5672/"
 
+base_url = "http://localhost:8000"
 data_folder = Path("data")
 train_file = data_folder / "gestures_merged.json"
+test_file = data_folder / "excuse-me.json"
 
 
 connection: Optional[aio_pika.RobustConnection] = None
@@ -42,10 +45,10 @@ app = FastAPI(lifespan=lifespan)
 
 # 📤 Відправка повідомлення
 @app.post("/test")
-async def test_send_endpoint() -> dict:
+async def test_send_endpoint(model_id: str = "DEFAULT_SYSTEM_MODEL") -> dict:
     message_body = {
         "taskId": "task_987654",
-        "modelId": "DEFAULT_SYSTEM_MODEL"
+        "modelId": model_id
     }
 
     await channel.default_exchange.publish(
@@ -84,3 +87,29 @@ async def consume_results():
                 print(f"📩 Отримано: {message.body.decode()}")
 
                 # 👉 тут твоя логіка
+                
+                
+@app.post("/init_model")
+def init(model_id: str = "DEFAULT_SYSTEM_MODEL"):
+    data = {
+        "modelId": model_id,
+        "modelUrl": "https://example.com/model.h5",
+        "scalerUrl": "https://example.com/scaler.pkl",
+        "labelsUrl": "https://example.com/labels.json"
+    }
+    response = requests.post(f"{base_url}/init", json=data)
+    
+    return response.json()
+
+@app.post("/predict_gesture")
+def predict(model_id: str = "DEFAULT_SYSTEM_MODEL"):
+    with open(test_file, 'r', encoding='utf-8') as f:
+        test_data = json.load(f)
+    
+    data = {
+        "modelId": model_id,
+        "rawData": test_data
+    }
+    response = requests.post(f"{base_url}/predict", json=data)
+    
+    return response.json()

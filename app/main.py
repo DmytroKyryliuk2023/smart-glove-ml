@@ -154,8 +154,10 @@ async def actual_training(
     # -------------------------------
     # 3. Stratified train/test split
     # -------------------------------
-    if len(np.unique(y)) < 2:
-        raise Exception("Недостатньо класів для тренування")
+    _, counts = np.unique(y, return_counts=True)
+
+    if np.any(counts < 2):
+        raise Exception("Кожен клас повинен мати мінімум 2 приклади")
 
     X_train, X_test, y_train, y_test = train_test_split(
         samples,

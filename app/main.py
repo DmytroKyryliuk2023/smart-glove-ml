@@ -54,12 +54,12 @@ async def train_model(message: dict) -> None:
         # Тренування моделі
         await actual_training(model_id, training_data)
         print(f"Модель {model_id} успішно натренована")
-        
+
         await send_training_result(model_id, "SUCCESS")
 
     except Exception as e:
         error_massage = None
-        
+
         if isinstance(e, httpx.HTTPError):
             error_massage = f"Помилка при отриманні даних: {e}"
             print(error_massage)
@@ -79,7 +79,7 @@ async def send_training_result(
     status: str,
     error_message: str = None,
 ) -> None:
-    """Відправляє результат тренування в чергу train_results_queue"""    
+    """Відправляє результат тренування в чергу train_results_queue"""
     result_message = {
         "modelId": model_id,
         "status": status,
@@ -87,11 +87,13 @@ async def send_training_result(
     }
 
     if status != "FAILED":
-        result_message.update({
-            "s3KerasPath": f"model_{model_id}.keras",
-            "s3ScalerPath": f"scaler_{model_id}.pkl",
-            "s3LabelsPath": f"labels_{model_id}.npy",
-        })
+        result_message.update(
+            {
+                "s3KerasPath": f"model_{model_id}.keras",
+                "s3ScalerPath": f"scaler_{model_id}.pkl",
+                "s3LabelsPath": f"labels_{model_id}.npy",
+            }
+        )
 
     await rabbit_router.publisher.publish(result_message, queue="train_results_queue")
     print(f"Результат для моделі {model_id} відправлено в чергу")
@@ -140,7 +142,7 @@ async def actual_training(
 
     if len(samples) == 0:
         raise Exception("Немає валідних даних для тренування")
-    
+
     samples = np.array(samples)
     labels = np.array(labels)
 
@@ -226,16 +228,15 @@ async def actual_training(
 
 
 @app.post("/init")
-def init_model(model: Models.IdentifiedModel):
+async def init_model(model: Models.InitModelRequest):
     """
     Ендпоінт для ініціалізації моделі.
     Отримує модель (наприклад, збережену Keras-модель) і
     присвоює її змінній current_model.
     """
-
     try:
-        model_id, model_instance = model.model_id, ModelSerializer.decode(model.model)
-        models[model_id] = model_instance
+        model_id = model.modelId
+        local_models[model_id] = await storage.load_model(model_id)
         return {"message": "Model initialized successfully"}
     except Exception as e:
         raise HTTPException(
@@ -251,9 +252,9 @@ def predict_gesture(gesture: Models.GestureData):
     Використовує поточну модель (current_model) для передбачення
     і повертає результат.
     """
-    model_id, gesture_data = gesture.model_id, gesture.gesture_data
+    model_id, gesture_data = gesture.modelId, gesture.rawData
 
-    if model_id not in models:
+    if model_id not in local_models:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="No model initialized"
         )
@@ -261,10 +262,10 @@ def predict_gesture(gesture: Models.GestureData):
     if not gesture_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid format or empty 'gesture_data' array",
+            detail="Invalid format or empty 'rawData' array",
         )
 
-    current_model = models[model_id]
+    current_model = local_models[model_id]
 
     # Перевірка, що кожен запис має правильну кількість ознак (18)
     if len(gesture_data[0]) != EXPECTED_COLUMNS:
@@ -296,4 +297,4 @@ def predict_gesture(gesture: Models.GestureData):
     predicted_label = current_model.classes[label_index]
     confidence = np.max(prediction_probs)
 
-    return {"prediction": predicted_label, "confidence": float(confidence)}
+    return {"predictedLabel": predicted_label, "confidence": float(confidence)}

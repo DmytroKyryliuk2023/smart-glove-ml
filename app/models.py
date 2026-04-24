@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import http
 
 import numpy as np
 import pandas as pd
@@ -13,10 +14,17 @@ class Model():
     scaler: MinMaxScaler
     classes: np.ndarray
     
-    
+
+class InitModelRequest(BaseModel):
+    modelId: str
+    modelUrl: str
+    scalerUrl: str
+    labelsUrl: str
+
+
 class GestureData(BaseModel):
-    model_id: str
-    gesture_data: list[list[float]]
+    modelId: str
+    rawData: list[list[float]]
     
 
 def resample_sequence(df: pd.DataFrame, target_length: int) -> pd.DataFrame:

@@ -1,5 +1,3 @@
-import json
-
 import httpx
 import models as Models
 import numpy as np
@@ -35,7 +33,7 @@ app.include_router(rabbit_router)
 
 
 @rabbit_router.subscriber("train_tasks_queue")
-async def train_model(message: dict):
+async def train_model(message: dict) -> None:
     """Обробник повідомлень з черги train_tasks_queue"""
     task_id = message.get("taskId")
     model_id = message.get("modelId")
@@ -80,7 +78,7 @@ async def send_training_result(
     model_id: str,
     status: str,
     error_message: str = None,
-):
+) -> None:
     """Відправляє результат тренування в чергу train_results_queue"""    
     result_message = {
         "modelId": model_id,
@@ -107,7 +105,7 @@ async def actual_training(
     Отримує дані (наприклад, жести), тренує модель і повертає її.
     """
     if not gestures:
-        raise Exception("Empty training data")
+        raise Exception("Отримано порожні дані для тренування")
 
     model = Models.Model(model=None, scaler=None, classes=None)
 
@@ -140,6 +138,9 @@ async def actual_training(
             samples.append(df_resampled.values.astype(float))
             labels.append(label)
 
+    if len(samples) == 0:
+        raise Exception("Немає валідних даних для тренування")
+    
     samples = np.array(samples)
     labels = np.array(labels)
 
@@ -153,6 +154,9 @@ async def actual_training(
     # -------------------------------
     # 3. Stratified train/test split
     # -------------------------------
+    if len(np.unique(y)) < 2:
+        raise Exception("Недостатньо класів для тренування")
+
     X_train, X_test, y_train, y_test = train_test_split(
         samples,
         y,

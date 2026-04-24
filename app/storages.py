@@ -31,14 +31,23 @@ class ModelMinIOStorage:
             await asyncio.to_thread(np.save, classes_path, model.classes)
 
             # Асинхронні операції з MinIO
-            await self.client.fput_object(
-                self.bucket_name, f"model_{model_id}.keras", model_path
+            await asyncio.to_thread(
+                self.client.fput_object,
+                self.bucket_name,
+                f"model_{model_id}.keras",
+                model_path,
             )
-            await self.client.fput_object(
-                self.bucket_name, f"scaler_{model_id}.pkl", scaler_path
+            await asyncio.to_thread(
+                self.client.fput_object,
+                self.bucket_name,
+                f"scaler_{model_id}.pkl",
+                scaler_path,
             )
-            await self.client.fput_object(
-                self.bucket_name, f"labels_{model_id}.npy", classes_path
+            await asyncio.to_thread(
+                self.client.fput_object,
+                self.bucket_name,
+                f"labels_{model_id}.npy",
+                classes_path,
             )
 
     async def load_model(self, model_id: str) -> Models.Model:
@@ -54,14 +63,23 @@ class ModelMinIOStorage:
             classes_path = os.path.join(tmpdir, "classes.npy")
 
             # Асинхронне завантаження з MinIO
-            await self.client.fget_object(
-                self.bucket_name, f"model_{model_id}.keras", model_path
+            await asyncio.to_thread(
+                self.client.fget_object,
+                self.bucket_name,
+                f"model_{model_id}.keras",
+                model_path
             )
-            await self.client.fget_object(
-                self.bucket_name, f"scaler_{model_id}.pkl", scaler_path
+            await asyncio.to_thread(
+                self.client.fget_object,
+                self.bucket_name,
+                f"scaler_{model_id}.pkl",
+                scaler_path
             )
-            await self.client.fget_object(
-                self.bucket_name, f"labels_{model_id}.npy", classes_path
+            await asyncio.to_thread(
+                self.client.fget_object,
+                self.bucket_name,
+                f"labels_{model_id}.npy",
+                classes_path
             )
 
             # Синхронні операції з диском в окремому потоці

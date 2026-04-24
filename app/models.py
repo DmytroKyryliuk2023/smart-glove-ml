@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import http
 
 import numpy as np
 import pandas as pd

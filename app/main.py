@@ -1,23 +1,65 @@
+import asyncio
+from contextlib import asynccontextmanager
+
+import aio_pika
 import httpx
-import models as Models
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, status
-from faststream.rabbit.fastapi import RabbitRouter
 from minio import Minio
 from minio.error import S3Error
+import json
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
-from storages import ModelMinIOStorage
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.models import Sequential
+
+import models as Models
+from storages import ModelMinIOStorage
 
 
 SEQUENCE_LENGTH = 50
 EXPECTED_COLUMNS = 18
 
 
-app = FastAPI()
+RABBIT_URL = "amqp://guest:guest@localhost:5672/"
+
+connection: aio_pika.RobustConnection = None
+channel: aio_pika.abc.AbstractChannel = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global connection, channel
+
+    connection = await aio_pika.connect_robust(RABBIT_URL)
+    channel = await connection.channel()
+
+    await channel.declare_queue("train_tasks_queue", durable=True)
+    await channel.declare_queue("train_results_queue", durable=True)
+
+    asyncio.create_task(consume_train_tasks())
+
+    yield
+
+    await connection.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+async def consume_train_tasks():
+    queue = await channel.declare_queue("train_tasks_queue", durable=True)
+
+    async with queue.iterator() as queue_iter:
+        async for message in queue_iter:
+            async with message.process():
+                try:
+                    body = json.loads(message.body.decode())
+                    await train_model(body)
+                except Exception as e:
+                    print(f"Consumer error: {e}")
+    
+
 local_models: dict[str, Models.Model] = {}
 storage = ModelMinIOStorage(
     Minio(
@@ -28,20 +70,15 @@ storage = ModelMinIOStorage(
     ),
     "gesture-models",
 )
-rabbit_router = RabbitRouter()
-app.include_router(rabbit_router)
 
 
-@rabbit_router.subscriber("train_tasks_queue")
 async def train_model(message: dict) -> None:
-    """Обробник повідомлень з черги train_tasks_queue"""
     task_id = message.get("taskId")
     model_id = message.get("modelId")
 
     print(f"Отримано задачу: taskId={task_id}, modelId={model_id}")
 
     try:
-        # Отримуємо дані з Java бекенду
         async with httpx.AsyncClient() as client:
             url = f"http://java-backend:8080/api/v1/internal/models/{model_id}/training-data"
 
@@ -51,35 +88,26 @@ async def train_model(message: dict) -> None:
 
         print(f"Отримано дані для моделі {model_id}")
 
-        # Тренування моделі
         await actual_training(model_id, training_data)
+
         print(f"Модель {model_id} успішно натренована")
 
         await send_training_result(model_id, "SUCCESS")
 
     except Exception as e:
-        error_massage = None
+        error_message = str(e)
 
         if isinstance(e, httpx.HTTPError):
-            error_massage = f"Помилка при отриманні даних: {e}"
-            print(error_massage)
+            print(f"Помилка при отриманні даних: {e}")
         elif isinstance(e, S3Error):
-            error_massage = f"Помилка при збереженні даних у Minio: {e}"
-            print(error_massage)
+            print(f"Помилка MinIO: {e}")
         else:
-            error_massage = f"Помилка тренування моделі {model_id}: {e}"
-            print(error_massage)
+            print(f"Помилка тренування: {e}")
 
-        # Звіт про помилку у чергу
-        await send_training_result(model_id, "FAILED", error_massage)
+        await send_training_result(model_id, "FAILED", error_message)
 
 
-async def send_training_result(
-    model_id: str,
-    status: str,
-    error_message: str = None,
-) -> None:
-    """Відправляє результат тренування в чергу train_results_queue"""
+async def send_training_result(model_id: str, status: str, error_message: str = None) -> None:
     result_message = {
         "modelId": model_id,
         "status": status,
@@ -87,16 +115,21 @@ async def send_training_result(
     }
 
     if status != "FAILED":
-        result_message.update(
-            {
-                "s3KerasPath": f"model_{model_id}.keras",
-                "s3ScalerPath": f"scaler_{model_id}.pkl",
-                "s3LabelsPath": f"labels_{model_id}.npy",
-            }
-        )
+        result_message.update({
+            "s3KerasPath": f"model_{model_id}.keras",
+            "s3ScalerPath": f"scaler_{model_id}.pkl",
+            "s3LabelsPath": f"labels_{model_id}.npy",
+        })
 
-    await rabbit_router.publisher.publish(result_message, queue="train_results_queue")
-    print(f"Результат для моделі {model_id} відправлено в чергу")
+    await channel.default_exchange.publish(
+        aio_pika.Message(
+            body=json.dumps(result_message).encode(),
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+        ),
+        routing_key="train_results_queue",
+    )
+
+    print(f"Результат для моделі {model_id} відправлено")
 
 
 async def actual_training(

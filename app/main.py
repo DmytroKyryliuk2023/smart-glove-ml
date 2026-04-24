@@ -80,7 +80,7 @@ async def train_model(message: dict) -> None:
 
     try:
         async with httpx.AsyncClient() as client:
-            url = f"http://java-backend:8080/api/v1/internal/models/{model_id}/training-data"
+            url = f"http://localhost:8080/api/v1/internal/models/{model_id}/training-data"
 
             response = await client.get(url)
             response.raise_for_status()

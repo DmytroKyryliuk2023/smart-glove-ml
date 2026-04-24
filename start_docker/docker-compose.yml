@@ -1,11 +1,12 @@
 version: '3.8'
 
 services:
-  app:
-    image: dmytrokyryliuk/smart-glove-ml:v1.0
+  smart-glove-ml:
+    image: dmytrokyryliuk/smart-glove-ml:v2.0
     ports:
       - "8000:8000"
     depends_on:
     - rabbitmq
+    - minio
     mem_limit: 4g
     restart: unless-stopped

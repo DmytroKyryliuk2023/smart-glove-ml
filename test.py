@@ -17,7 +17,7 @@ async def test_send() -> None:
     await rabbit_router.broker.publish(
         {
             "taskId": "task_987654",
-            "modelId": "65f1a2b3c4d5"
+            "modelId": "DEFAULT_SYSTEM_MODEL"
         },
         queue="train_tasks_queue"
     )

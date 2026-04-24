@@ -1,5 +1,5 @@
 if [[ "$PWD" != *start_server ]]; then
-  cd start_server
+  cd app
 fi
 
-uvicorn app.main:app --reload
+uvicorn main:app --reload

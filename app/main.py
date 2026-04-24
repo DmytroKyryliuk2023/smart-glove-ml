@@ -34,30 +34,6 @@ rabbit_router = RabbitRouter()
 app.include_router(rabbit_router)
 
 
-async def send_training_result(
-    model_id: str,
-    status: str,
-    error_message: str = None,
-):
-    """Відправляє результат тренування в чергу train_results_queue"""    
-    result_message = {
-        "modelId": model_id,
-        "status": status,
-        "errorMessage": error_message,
-    }
-
-    if status != "FAILED":
-        result_message.update({
-            "s3KerasPath": f"model_{model_id}.keras",
-            "s3ScalerPath": f"scaler_{model_id}.pkl",
-            "s3LabelsPath": f"labels_{model_id}.npy",
-        })
-
-    # Правильний спосіб: через брокер
-    await rabbit_router.broker.publish(result_message, queue="train_results_queue")
-    print(f"Результат для моделі {model_id} відправлено в чергу")
-
-
 @rabbit_router.subscriber("train_tasks_queue")
 async def train_model(message: dict):
     """Обробник повідомлень з черги train_tasks_queue"""
@@ -78,7 +54,7 @@ async def train_model(message: dict):
         print(f"Отримано дані для моделі {model_id}")
 
         # Тренування моделі
-        actual_training(model_id, training_data)
+        await actual_training(model_id, training_data)
         print(f"Модель {model_id} успішно натренована")
         
         await send_training_result(model_id, "SUCCESS")
@@ -100,7 +76,30 @@ async def train_model(message: dict):
         await send_training_result(model_id, "FAILED", error_massage)
 
 
-def actual_training(
+async def send_training_result(
+    model_id: str,
+    status: str,
+    error_message: str = None,
+):
+    """Відправляє результат тренування в чергу train_results_queue"""    
+    result_message = {
+        "modelId": model_id,
+        "status": status,
+        "errorMessage": error_message,
+    }
+
+    if status != "FAILED":
+        result_message.update({
+            "s3KerasPath": f"model_{model_id}.keras",
+            "s3ScalerPath": f"scaler_{model_id}.pkl",
+            "s3LabelsPath": f"labels_{model_id}.npy",
+        })
+
+    await rabbit_router.publisher.publish(result_message, queue="train_results_queue")
+    print(f"Результат для моделі {model_id} відправлено в чергу")
+
+
+async def actual_training(
     model_id: str, gestures: dict[str, list[list[list[float]]]]
 ) -> None:
     """
@@ -217,7 +216,7 @@ def actual_training(
     # -------------------------------
     # 8. Збереження моделі у Minio
     # -------------------------------
-    storage.save_model(model_id, model)
+    await storage.save_model(model_id, model)
 
 
 @app.post("/init")

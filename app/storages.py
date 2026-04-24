@@ -11,6 +11,14 @@ class ModelMinIOStorage:
     def __init__(self, minio_client: Minio, bucket_name: str):
         self.client = minio_client
         self.bucket_name = bucket_name
+        
+        # Cтворюємо бакет якщо його нема
+        try:
+            exists = self.client.bucket_exists(bucket_name)
+            if not exists:
+                self.client.make_bucket(bucket_name)
+        except Exception as e:
+            print(f"Не вдалося перевірити/створити бакет: {e}")
 
     async def save_model(self, model_id: str, model: Models.Model):
         """Зберігає модель використовуючи тимчасові файли"""

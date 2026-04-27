@@ -32,6 +32,7 @@ channel: aio_pika.abc.AbstractChannel = None
 async def lifespan(app: FastAPI):
     global connection, channel
 
+    await asyncio.sleep(10)  # Чекаємо, поки RabbitMQ буде готовий
     connection = await aio_pika.connect_robust(RABBIT_URL)
     channel = await connection.channel()
 

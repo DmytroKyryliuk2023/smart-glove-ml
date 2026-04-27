@@ -44,7 +44,7 @@ app = FastAPI(lifespan=lifespan)
 
 
 # 📤 Відправка повідомлення
-@app.post("/test")
+@app.post("/send-training-task")
 async def test_send_endpoint(model_id: str = "DEFAULT_SYSTEM_MODEL") -> dict:
     message_body = {
         "taskId": "task_987654",

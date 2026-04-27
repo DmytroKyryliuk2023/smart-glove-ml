@@ -22,7 +22,7 @@ SEQUENCE_LENGTH = 50
 EXPECTED_COLUMNS = 18
 
 
-RABBIT_URL = "amqp://guest:guest@localhost:5672/"
+RABBIT_URL = "amqp://guest:guest@rabbitmq:5672/"
 
 connection: aio_pika.RobustConnection = None
 channel: aio_pika.abc.AbstractChannel = None
@@ -63,7 +63,7 @@ async def consume_train_tasks():
 local_models: dict[str, Models.Model] = {}
 storage = ModelMinIOStorage(
     Minio(
-        "localhost:9000",
+        "minio:9000",
         access_key="minioadmin",
         secret_key="minioadminpassword",
         secure=False,
@@ -80,7 +80,7 @@ async def train_model(message: dict) -> None:
 
     try:
         async with httpx.AsyncClient() as client:
-            url = f"http://localhost:8080/api/v1/internal/models/{model_id}/training-data"
+            url = f"http://host.docker.internal:8080/api/v1/internal/models/{model_id}/training-data"
 
             response = await client.get(url)
             response.raise_for_status()

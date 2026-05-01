@@ -1,158 +1,150 @@
-import base64
-from dataclasses import dataclass
-import io
-import joblib
-import tempfile
+import asyncio
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, status
+import aio_pika
+import httpx
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+from fastapi import FastAPI, HTTPException, status
+from minio import Minio
+from minio.error import S3Error
+import json
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential, save_model, load_model
-from tensorflow.keras.layers import Input, LSTM, Dense, Dropout
+from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
+from tensorflow.keras.models import Sequential
+
+import models as Models
+from storages import ModelMinIOStorage
 
 
-class Models:
-    @dataclass
-    class Model():
-        sequence_length: int
-        expected_columns: int
-        model: Sequential
-        scaler: MinMaxScaler
-        classes: np.ndarray
-        
-    class EncodedModel(BaseModel):
-        sequence_length: int
-        expected_columns: int
-        model: str
-        scaler: str
-        classes: str
-        
-    class IdentifiedModel(BaseModel):
-        model_id: str
-        model: "Models.EncodedModel"
-        
-    class GestureData(BaseModel):
-        model_id: str
-        gesture_data: list[list[float]]
-        
-    @staticmethod
-    def resample_sequence(df: pd.DataFrame, target_length: int) -> pd.DataFrame:
-        """
-        Приводить кількість рядків у df до target_length.
-        Якщо рядків менше — виконує інтерполяцію.
-        Якщо більше — рівномірно вибирає точки.
-        
-        Args:
-            df: pandas DataFrame із часовими даними (один жест)
-            target_length: бажана кількість точок після вирівнювання
-            
-        Returns:
-            pandas DataFrame тієї ж структури, але з target_length рядків
-        """
-        # Завжди скидаємо індекс для чистої роботи
-        df = df.reset_index(drop=True)
-        current_length = len(df)
+SEQUENCE_LENGTH = 50
+EXPECTED_COLUMNS = 18
 
-        # якщо даних менше - інтерполюємо
-        if current_length < target_length:
-            # Створюємо новий дробовий індекс, що відповідає цільовій довжині
-            new_index = np.linspace(0, current_length - 1, target_length)
-            
-            # Розширюємо DataFrame до нового індексу. 
-            # Точки, що не існували, заповняться значеннями NaN.
-            df_resampled = df.reindex(new_index)
-            
-            # 3. Інтерполюємо (заповнюємо) пропущені значення NaN лінійно
-            df_resampled = df_resampled.interpolate(method='linear')
-            
-            return df_resampled.reset_index(drop=True)
 
-        # якщо даних більше - рівномірно вибираємо точки (цей метод працював правильно)
-        elif current_length > target_length:
-            indices = np.linspace(0, current_length - 1, target_length, dtype=int)
-            df_resampled = df.iloc[indices].reset_index(drop=True)
-            return df_resampled
+RABBIT_URL = "amqp://guest:guest@rabbitmq:5672/"
 
-        # якщо вже рівно — нічого не робимо
+connection: aio_pika.RobustConnection = None
+channel: aio_pika.abc.AbstractChannel = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global connection, channel
+
+    await asyncio.sleep(10)  # Чекаємо, поки RabbitMQ буде готовий
+    connection = await aio_pika.connect_robust(RABBIT_URL)
+    channel = await connection.channel()
+
+    await channel.declare_queue("train_tasks_queue", durable=True)
+    await channel.declare_queue("train_results_queue", durable=True)
+
+    asyncio.create_task(consume_train_tasks())
+
+    yield
+
+    await connection.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+async def consume_train_tasks():
+    queue = await channel.declare_queue("train_tasks_queue", durable=True)
+
+    async with queue.iterator() as queue_iter:
+        async for message in queue_iter:
+            async with message.process():
+                try:
+                    body = json.loads(message.body.decode())
+                    await train_model(body)
+                except Exception as e:
+                    print(f"Consumer error: {e}")
+    
+
+local_models: dict[str, Models.Model] = {}
+storage = ModelMinIOStorage(
+    Minio(
+        "minio:9000",
+        access_key="minioadmin",
+        secret_key="minioadminpassword",
+        secure=False,
+    ),
+    "gesture-models",
+)
+
+
+async def train_model(message: dict) -> None:
+    task_id = message.get("taskId")
+    model_id = message.get("modelId")
+
+    print(f"Отримано задачу: taskId={task_id}, modelId={model_id}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            url = f"http://host.docker.internal:8080/api/v1/internal/models/{model_id}/training-data"
+
+            response = await client.get(url)
+            response.raise_for_status()
+            training_data = response.json()
+
+        print(f"Отримано дані для моделі {model_id}")
+
+        await actual_training(model_id, training_data)
+
+        print(f"Модель {model_id} успішно натренована")
+
+        await send_training_result(model_id, "SUCCESS")
+
+    except Exception as e:
+        error_message = str(e)
+
+        if isinstance(e, httpx.HTTPError):
+            print(f"Помилка при отриманні даних: {e}")
+        elif isinstance(e, S3Error):
+            print(f"Помилка MinIO: {e}")
         else:
-            return df
-        
-    
-class ModelSerializer:
-    @staticmethod
-    def encode(model: Models.Model) -> Models.EncodedModel:
-        # Використовуємо тимчасовий файл для моделі
-        with tempfile.NamedTemporaryFile(suffix='.keras', delete=True) as tmp_file:
-            save_model(model.model, tmp_file.name)  # зберігаємо у файл
-            tmp_file.seek(0)
-            model_encoded = base64.b64encode(tmp_file.read()).decode('utf-8')
-        
-        # Scalers та classes залишаються в BytesIO (вони працюють нормально)
-        with io.BytesIO() as scaler_buffer:
-            joblib.dump(model.scaler, scaler_buffer)
-            scaler_buffer.seek(0)
-            scaler_encoded = base64.b64encode(scaler_buffer.read()).decode('utf-8')
-        
-        with io.BytesIO() as classes_buffer:
-            np.save(classes_buffer, model.classes)
-            classes_buffer.seek(0)
-            classes_encoded = base64.b64encode(classes_buffer.read()).decode('utf-8')
+            print(f"Помилка тренування: {e}")
 
-        return Models.EncodedModel(
-            sequence_length=model.sequence_length,
-            expected_columns=model.expected_columns,
-            model=model_encoded,
-            scaler=scaler_encoded,
-            classes=classes_encoded
-        )
-    
-    @staticmethod
-    def decode(model: Models.EncodedModel) -> Models.Model:
-        # Для декодування теж використовуємо тимчасовий файл
-        with tempfile.NamedTemporaryFile(suffix='.keras', delete=True) as tmp_file:
-            tmp_file.write(base64.b64decode(model.model))
-            tmp_file.flush()
-            keras_model = load_model(tmp_file.name)
-        
-        with io.BytesIO(base64.b64decode(model.scaler)) as scaler_buffer:
-            scaler = joblib.load(scaler_buffer)
-        
-        with io.BytesIO(base64.b64decode(model.classes)) as classes_buffer:
-            classes = np.load(classes_buffer, allow_pickle=True)
-
-        return Models.Model(
-            sequence_length=model.sequence_length,
-            expected_columns=model.expected_columns,
-            model=keras_model,
-            scaler=scaler,
-            classes=classes
-        )
-        
-      
-app = FastAPI()
-models: dict[str, Models.Model] = {}
+        await send_training_result(model_id, "FAILED", error_message)
 
 
-@app.post("/train", response_model=Models.EncodedModel)
-def train_model(gestures: dict[str, list[list[list[float]]]]):
+async def send_training_result(model_id: str, status: str, error_message: str = None) -> None:
+    result_message = {
+        "modelId": model_id,
+        "status": status,
+        "errorMessage": error_message,
+    }
+
+    if status != "FAILED":
+        result_message.update({
+            "s3KerasPath": f"model_{model_id}.keras",
+            "s3ScalerPath": f"scaler_{model_id}.pkl",
+            "s3LabelsPath": f"labels_{model_id}.npy",
+        })
+
+    await channel.default_exchange.publish(
+        aio_pika.Message(
+            body=json.dumps(result_message).encode(),
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+        ),
+        routing_key="train_results_queue",
+    )
+
+    print(f"Результат для моделі {model_id} відправлено")
+
+
+async def actual_training(
+    model_id: str, gestures: dict[str, list[list[list[float]]]]
+) -> None:
     """
     Ендпоінт для тренування нової моделі.
     Отримує дані (наприклад, жести), тренує модель і повертає її.
     """
     if not gestures:
-        raise HTTPException(400, "Empty training data")
-    
-    model = Models.Model(
-        sequence_length=50,
-        expected_columns=18,
-        model=None,
-        scaler=None,
-        classes=None
-    )
-    
+        raise Exception("Отримано порожні дані для тренування")
+
+    model = Models.Model(model=None, scaler=None, classes=None)
+
     samples = []
     labels = []
 
@@ -164,23 +156,30 @@ def train_model(gestures: dict[str, list[list[list[float]]]]):
             df = pd.DataFrame(seq)
 
             # Перевірка кількості колонок
-            if df.shape[1] != model.expected_columns:
-                print(f"Пропускаю {label} — неправильна кількість колонок {df.shape[1]}")
+            if df.shape[1] != EXPECTED_COLUMNS:
+                print(
+                    f"Пропускаю {label} — неправильна кількість колонок {df.shape[1]}"
+                )
                 continue
 
             # Ресемплінг
-            df_resampled = Models.resample_sequence(df, model.sequence_length)
+            df_resampled = Models.resample_sequence(df, SEQUENCE_LENGTH)
 
-            if df_resampled.shape != (model.sequence_length , model.expected_columns):
-                print(f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}")
+            if df_resampled.shape != (SEQUENCE_LENGTH, EXPECTED_COLUMNS):
+                print(
+                    f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}"
+                )
                 continue
 
             samples.append(df_resampled.values.astype(float))
             labels.append(label)
 
+    if len(samples) == 0:
+        raise Exception("Немає валідних даних для тренування")
+
     samples = np.array(samples)
     labels = np.array(labels)
-    
+
     # -------------------------------
     # 2. Кодування міток
     # -------------------------------
@@ -191,11 +190,17 @@ def train_model(gestures: dict[str, list[list[list[float]]]]):
     # -------------------------------
     # 3. Stratified train/test split
     # -------------------------------
+    _, counts = np.unique(y, return_counts=True)
+
+    if np.any(counts < 2):
+        raise Exception("Кожен клас повинен мати мінімум 2 приклади")
+
     X_train, X_test, y_train, y_test = train_test_split(
-        samples, y,
+        samples,
+        y,
         test_size=0.2,
         random_state=42,
-        stratify=y  # забезпечує правильне розділення по класах
+        stratify=y,  # забезпечує правильне розділення по класах
     )
 
     # -------------------------------
@@ -210,31 +215,38 @@ def train_model(gestures: dict[str, list[list[list[float]]]]):
 
     model.scaler.fit(X_train_2d)
     X_train_scaled = model.scaler.transform(X_train_2d).reshape(N_train, T, F)
-    X_test_scaled = np.clip(model.scaler.transform(X_test_2d).reshape(N_test, T, F), -1, 1)
+    X_test_scaled = np.clip(
+        model.scaler.transform(X_test_2d).reshape(N_test, T, F), -1, 1
+    )
 
     # -------------------------------
     # 5. Модель LSTM(32) з Input шаром
     # -------------------------------
-    model.model = Sequential([
-        Input(shape=(T, F)),       # Забирає попередження input_shape
-        LSTM(32, return_sequences=False),  # 32 юніти
-        Dropout(0.3),               # трохи більше регуляризації
-        Dense(64, activation='relu'),  # Dense шар перед виходом
-        Dropout(0.2),
-        Dense(len(np.unique(y)), activation='softmax')  # вихідний шар
-    ])
+    model.model = Sequential(
+        [
+            Input(shape=(T, F)),  # Забирає попередження input_shape
+            LSTM(32, return_sequences=False),  # 32 юніти
+            Dropout(0.3),  # трохи більше регуляризації
+            Dense(64, activation="relu"),  # Dense шар перед виходом
+            Dropout(0.2),
+            Dense(len(np.unique(y)), activation="softmax"),  # вихідний шар
+        ]
+    )
 
-    model.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    model.model.compile(
+        optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+    )
 
     # -------------------------------
     # 6. Навчання
     # -------------------------------
     model.model.fit(
-        X_train_scaled, y_train,
+        X_train_scaled,
+        y_train,
         validation_data=(X_test_scaled, y_test),
         epochs=50,
         batch_size=4,
-        verbose=1
+        verbose=1,
     )
 
     # -------------------------------
@@ -242,31 +254,28 @@ def train_model(gestures: dict[str, list[list[list[float]]]]):
     # -------------------------------
     test_loss, test_accuracy = model.model.evaluate(X_test_scaled, y_test, verbose=0)
     print(f"Точність моделі на тестових даних: {test_accuracy * 100:.2f}%")
-    
+
     # -------------------------------
-    # 8. Кодування
+    # 8. Збереження моделі у Minio
     # -------------------------------
-    encoded_model = ModelSerializer.encode(model)
-    
-    return encoded_model
+    await storage.save_model(model_id, model)
 
 
 @app.post("/init")
-def init_model(model: Models.IdentifiedModel):
+async def init_model(model: Models.InitModelRequest):
     """
     Ендпоінт для ініціалізації моделі.
-    Отримує модель (наприклад, збережену Keras-модель) і 
+    Отримує модель (наприклад, збережену Keras-модель) і
     присвоює її змінній current_model.
     """
-    
     try:
-        model_id, model_instance = model.model_id, ModelSerializer.decode(model.model)
-        models[model_id] = model_instance
+        model_id = model.modelId
+        local_models[model_id] = await storage.load_model(model_id)
         return {"message": "Model initialized successfully"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to initialize model: {str(e)}"
+            detail=f"Failed to initialize model: {str(e)}",
         )
 
 
@@ -277,53 +286,49 @@ def predict_gesture(gesture: Models.GestureData):
     Використовує поточну модель (current_model) для передбачення
     і повертає результат.
     """
-    model_id, gesture_data = gesture.model_id, gesture.gesture_data
+    model_id, gesture_data = gesture.modelId, gesture.rawData
 
-    if model_id not in models:
+    if model_id not in local_models:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No model initialized"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No model initialized"
         )
-        
+
     if not gesture_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid format or empty 'gesture_data' array"
+            detail="Invalid format or empty 'rawData' array",
         )
-    
-    current_model = models[model_id]
+
+    current_model = local_models[model_id]
 
     # Перевірка, що кожен запис має правильну кількість ознак (18)
-    if len(gesture_data[0]) != current_model.expected_columns:
+    if len(gesture_data[0]) != EXPECTED_COLUMNS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Expected {current_model.expected_columns} \
-            columns, but got {len(gesture_data[0])}"
+            detail=f"Expected {EXPECTED_COLUMNS} \
+            columns, but got {len(gesture_data[0])}",
         )
 
     df = pd.DataFrame(gesture_data)
-    
+
     # --- Приведення даних до єдиної довжини ---
-    df_resampled = Models.resample_sequence(df, current_model.sequence_length)
-    
+    df_resampled = Models.resample_sequence(df, SEQUENCE_LENGTH)
+
     # 1. Перетворюємо дані в numpy масив
     input_data = df_resampled.values.astype(float)
-    
+
     # 2. Масштабуємо дані за допомогою завантаженого скейлера
     data_scaled = np.clip(current_model.scaler.transform(input_data), -1, 1)
-    
+
     # 3. Додаємо "batch" вимір для моделі: (50, 18) -> (1, 50, 18)
     data_for_model = np.expand_dims(data_scaled, axis=0)
-    
+
     # 4. Робимо передбачення
     prediction_probs = current_model.model.predict(data_for_model, verbose=0)
-    
+
     # 5. Інтерпретуємо результат
     label_index = np.argmax(prediction_probs)
     predicted_label = current_model.classes[label_index]
     confidence = np.max(prediction_probs)
-    
-    return {
-        "prediction": predicted_label,
-        "confidence": float(confidence)
-    }
+
+    return {"predictedLabel": predicted_label, "confidence": float(confidence)}

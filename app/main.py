@@ -258,7 +258,7 @@ async def actual_training(
 
 
 @app.post("/init")
-async def init_model(model: Models.InitModelRequest):
+async def init_model(model: Models.InitDelModelRequest):
     model_id = model.modelId
     try:
         local_models[model_id] = await storage.load_model(model_id)

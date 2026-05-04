@@ -21,7 +21,6 @@ from storages import ModelMinIOStorage
 SEQUENCE_LENGTH = 50
 EXPECTED_COLUMNS = 18
 
-
 RABBIT_URL = "amqp://guest:guest@rabbitmq:5672/"
 
 connection: aio_pika.RobustConnection = None
@@ -47,20 +46,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
-async def consume_train_tasks():
-    queue = await channel.declare_queue("train_tasks_queue", durable=True)
-
-    async with queue.iterator() as queue_iter:
-        async for message in queue_iter:
-            async with message.process():
-                try:
-                    body = json.loads(message.body.decode())
-                    await train_model(body)
-                except Exception as e:
-                    print(f"Consumer error: {e}")
-    
-
 local_models: dict[str, Models.Model] = {}
 storage = ModelMinIOStorage(
     Minio(
@@ -72,6 +57,23 @@ storage = ModelMinIOStorage(
     "gesture-models",
 )
 
+
+async def consume_train_tasks():
+    queue = await channel.declare_queue("train_tasks_queue", durable=True)
+
+    async with queue.iterator() as queue_iter:
+        async for message in queue_iter:
+            asyncio.create_task(_process_message(message))
+
+
+async def _process_message(message):
+    async with message.process():
+        try:
+            body = json.loads(message.body.decode())
+            await train_model(body)
+        except Exception as e:
+            print(f"Consumer error: {e}")
+    
 
 async def train_model(message: dict) -> None:
     task_id = message.get("taskId")
@@ -88,11 +90,8 @@ async def train_model(message: dict) -> None:
             training_data = response.json()
 
         print(f"Отримано дані для моделі {model_id}")
-
         await actual_training(model_id, training_data)
-
         print(f"Модель {model_id} успішно натренована")
-
         await send_training_result(model_id, "SUCCESS")
 
     except Exception as e:
@@ -240,8 +239,8 @@ async def actual_training(
         X_train_scaled,
         y_train,
         validation_data=(X_test_scaled, y_test),
-        epochs=50,
-        batch_size=4,
+        epochs=30,
+        batch_size=16,
         verbose=1,
     )
 

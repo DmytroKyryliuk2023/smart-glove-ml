@@ -286,7 +286,7 @@ def delete_model(model: Models.InitDelModelRequest):
 
 
 @app.post("/predict")
-def predict_gesture(gesture: Models.GestureData):
+async def predict_gesture(gesture: Models.GestureData):
     model_id, gesture_data = gesture.modelId, gesture.rawData
 
     if model_id not in local_models:
@@ -300,16 +300,22 @@ def predict_gesture(gesture: Models.GestureData):
             detail="Invalid format or empty 'rawData' array",
         )
 
-    current_model = local_models[model_id]
-
-    # Перевірка, що кожен запис має правильну кількість ознак (18)
     if len(gesture_data[0]) != EXPECTED_COLUMNS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Expected {EXPECTED_COLUMNS} \
             columns, but got {len(gesture_data[0])}",
         )
+        
+    current_model = local_models[model_id]
+    
+    response = await asyncio.to_thread(
+        _predict_sync, current_model, gesture_data
+    )
+    return response
+    
 
+def _predict_sync(current_model, gesture_data):
     df = pd.DataFrame(gesture_data)
 
     # --- Приведення даних до єдиної довжини ---

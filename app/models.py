@@ -14,11 +14,8 @@ class Model():
     classes: np.ndarray
     
 
-class InitModelRequest(BaseModel):
+class InitDelModelRequest(BaseModel):
     modelId: str
-    modelUrl: str
-    scalerUrl: str
-    labelsUrl: str
 
 
 class GestureData(BaseModel):

@@ -136,10 +136,6 @@ async def send_training_result(model_id: str, status: str, error_message: str = 
 async def actual_training(
     model_id: str, gestures: dict[str, list[list[list[float]]]]
 ) -> None:
-    """
-    Ендпоінт для тренування нової моделі.
-    Отримує дані (наприклад, жести), тренує модель і повертає її.
-    """
     if not gestures:
         raise Exception("Отримано порожні дані для тренування")
 
@@ -263,29 +259,34 @@ async def actual_training(
 
 @app.post("/init")
 async def init_model(model: Models.InitModelRequest):
-    """
-    Ендпоінт для ініціалізації моделі.
-    Отримує модель (наприклад, збережену Keras-модель) і
-    присвоює її змінній current_model.
-    """
+    model_id = model.modelId
     try:
-        model_id = model.modelId
         local_models[model_id] = await storage.load_model(model_id)
+        print(f"Модель {model_id} завантажена в пам'ять")
         return {"message": "Model initialized successfully"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to initialize model: {str(e)}",
         )
+        
+        
+@app.post("/del")
+def delete_model(model: Models.InitDelModelRequest):
+    model_id = model.modelId
+    if model_id in local_models:
+        del local_models[model_id]
+        print(f"Модель {model_id} видалена з пам'яті")
+        return {"message": "Model deleted successfully"}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Model not found",
+        )
 
 
 @app.post("/predict")
 def predict_gesture(gesture: Models.GestureData):
-    """
-    Ендпоінт для передбачення жесту.
-    Використовує поточну модель (current_model) для передбачення
-    і повертає результат.
-    """
     model_id, gesture_data = gesture.modelId, gesture.rawData
 
     if model_id not in local_models:

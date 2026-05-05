@@ -92,14 +92,19 @@ async def consume_results():
 @app.post("/init_model")
 def init(model_id: str = "DEFAULT_SYSTEM_MODEL"):
     data = {
-        "modelId": model_id,
-        "modelUrl": "https://example.com/model.h5",
-        "scalerUrl": "https://example.com/scaler.pkl",
-        "labelsUrl": "https://example.com/labels.json"
+        "modelId": model_id
     }
     response = requests.post(f"{base_url}/init", json=data)
     
     return response.json()
+
+
+@app.post("/delete_model")
+def delete_model(model_id: str = "DEFAULT_SYSTEM_MODEL"):
+    response = requests.post(f"{base_url}/del", json={"modelId": model_id})
+    
+    return response.json()
+
 
 @app.post("/predict_gesture")
 def predict(model_id: str = "DEFAULT_SYSTEM_MODEL"):

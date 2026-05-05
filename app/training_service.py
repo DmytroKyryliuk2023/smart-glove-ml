@@ -113,4 +113,3 @@ class TrainingService:
         print(f"Точність моделі на тестових даних: {test_accuracy * 100:.2f}%")
 
         await self.storage.save_model(model_id, model)
-        return model

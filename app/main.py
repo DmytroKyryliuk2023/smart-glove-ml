@@ -61,6 +61,9 @@ app = FastAPI(lifespan=lifespan)
 @app.post("/models/{model_id}")
 async def init_model(model_id: str):
     try:
+        if model_id in local_models:
+            return {"message": "Model already initialized"}
+        
         local_models[model_id] = await training_service.storage.load_model(model_id)
         print(f"Модель {model_id} завантажена в пам'ять")
         return {"message": "Model initialized successfully"}

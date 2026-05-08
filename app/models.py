@@ -14,10 +14,6 @@ class Model():
     classes: np.ndarray
     
 
-class InitDelModelRequest(BaseModel):
-    modelId: str
-
-
 class GestureData(BaseModel):
     modelId: str
     rawData: list[list[float]]

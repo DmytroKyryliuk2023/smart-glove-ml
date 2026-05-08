@@ -33,8 +33,8 @@ class TrainingService:
             response.raise_for_status()
             return response.json()
 
-    async def train_model(self, task_id: str, model_id: str) -> None:
-        print(f"Отримано задачу: taskId={task_id}, modelId={model_id}")
+    async def train_model(self, model_id: str) -> None:
+        print(f"Отримано задачу на тренування: modelId={model_id}")
         training_data = await self.fetch_training_data(model_id)
         print(f"Отримано дані для моделі {model_id}")
         await self._actual_training(model_id, training_data)

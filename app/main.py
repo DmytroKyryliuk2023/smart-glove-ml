@@ -22,17 +22,14 @@ async def process_message(message):
     async with message.process():
         try:
             body = json.loads(message.body.decode())
-            task_id = body.get("taskId")
             model_id = body.get("modelId")
             
-            await training_service.train_model(task_id, model_id)
+            await training_service.train_model(model_id)
             
             result = {
                 "modelId": model_id,
                 "status": "SUCCESS",
-                "s3KerasPath": f"model_{model_id}.keras",
-                "s3ScalerPath": f"scaler_{model_id}.pkl",
-                "s3LabelsPath": f"labels_{model_id}.npy",
+                "errorMessage": None
             }
             await rabbitmq.publish_result("train_results_queue", result)
             
@@ -61,9 +58,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.post("/init")
-async def init_model(model: Models.InitDelModelRequest):
-    model_id = model.modelId
+@app.post("/models/{model_id}")
+async def init_model(model_id: str):
     try:
         local_models[model_id] = await training_service.storage.load_model(model_id)
         print(f"Модель {model_id} завантажена в пам'ять")
@@ -75,9 +71,8 @@ async def init_model(model: Models.InitDelModelRequest):
         )
 
 
-@app.post("/del")
-def delete_model(model: Models.InitDelModelRequest):
-    model_id = model.modelId
+@app.delete("/models/{model_id}")
+async def delete_model(model_id: str):
     if model_id in local_models:
         del local_models[model_id]
         print(f"Модель {model_id} видалена з пам'яті")

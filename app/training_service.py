@@ -29,7 +29,7 @@ class TrainingService:
         
     async def fetch_training_data(self, model_id: str):
         async with httpx.AsyncClient() as client:
-            url = f"http://{self.server_endpoint}/api/v1/internal/models/{model_id}/training-data"
+            url = f"{self.server_endpoint}/api/v1/internal/models/{model_id}/training-data"
             response = await client.get(url)
             response.raise_for_status()
             return response.json()

@@ -5,8 +5,8 @@ services:
     ports:
       - "27018:27017" # Стандартний порт для підключення Java-бекенду
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: secretpassword
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     volumes:
       - mongo-data:/data/db
     restart: unless-stopped
@@ -17,6 +17,9 @@ services:
     ports:
       - "5672:5672"   # Для обміну даними між Java та ML
       - "15672:15672" # Веб-панель керування
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     restart: unless-stopped
 
   minio:
@@ -26,8 +29,8 @@ services:
       - "9000:9000"   # API для завантаження файлів/моделей
       - "9001:9001"   # Веб-інтерфейс (консоль)
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadminpassword
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
@@ -37,10 +40,16 @@ services:
     image: dmytrokyryliuk/smart-glove-ml:test_mac
     container_name: smart-glove-ml
     ports:
-      - "8000:8000"   # Порт для ML API
+      - "8000:8000"
     depends_on:
       - rabbitmq
       - minio
+    environment:
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - SERVER_ENDPOINT=${SERVER_ENDPOINT}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
     mem_limit: 4g
     extra_hosts:
       - "host.docker.internal:host-gateway"

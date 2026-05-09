@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import json
+import os
 
 from fastapi import FastAPI, HTTPException, status
 
@@ -10,10 +11,19 @@ from training_service import TrainingService
 from prediction_service import PredictionService
 
 
-RABBIT_URL = "amqp://guest:guest@rabbitmq:5672/"
+RABBIT_URL = os.getenv("RABBITMQ_URL")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+SERVER_ENDPOINT = os.getenv("SERVER_ENDPOINT")
 
 rabbitmq = RabbitMQService(RABBIT_URL)
-training_service = TrainingService()
+training_service = TrainingService(
+    minio_endpoint=MINIO_ENDPOINT,
+    minio_access_key=MINIO_ACCESS_KEY,
+    minio_secret_key=MINIO_SECRET_KEY,
+    server_endpoint=SERVER_ENDPOINT
+)
 prediction_service = PredictionService()
 local_models: dict[str, Models.Model] = {}
 

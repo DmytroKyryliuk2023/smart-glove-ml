@@ -15,20 +15,21 @@ class TrainingService:
     SEQUENCE_LENGTH = 50
     EXPECTED_COLUMNS = 18
 
-    def __init__(self):
+    def __init__(self, minio_endpoint: str, minio_access_key: str, minio_secret_key: str, server_endpoint: str):
         self.storage = ModelMinIOStorage(
             Minio(
-                "minio:9000",
-                access_key="minioadmin",
-                secret_key="minioadminpassword",
+                minio_endpoint,
+                access_key=minio_access_key,
+                secret_key=minio_secret_key,
                 secure=False,
             ),
             "gesture-models",
         )
-
+        self.server_endpoint = server_endpoint
+        
     async def fetch_training_data(self, model_id: str):
         async with httpx.AsyncClient() as client:
-            url = f"http://host.docker.internal:8080/api/v1/internal/models/{model_id}/training-data"
+            url = f"http://{self.server_endpoint}/api/v1/internal/models/{model_id}/training-data"
             response = await client.get(url)
             response.raise_for_status()
             return response.json()

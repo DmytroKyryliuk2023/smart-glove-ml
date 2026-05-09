@@ -1,12 +1,51 @@
-version: '3.8'
-
 services:
-  smart-glove-ml:
-    image: dmytrokyryliuk/smart-glove-ml:v2.0
+  mongodb:
+    image: mongo:7.0
+    container_name: smartglove-mongodb
     ports:
-      - "8000:8000"
-    depends_on:
-    - rabbitmq
-    - minio
-    mem_limit: 4g
+      - "27018:27017" # Стандартний порт для підключення Java-бекенду
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: secretpassword
+    volumes:
+      - mongo-data:/data/db
     restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartglove-rabbitmq
+    ports:
+      - "5672:5672"   # Для обміну даними між Java та ML
+      - "15672:15672" # Веб-панель керування
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: smartglove-minio
+    ports:
+      - "9000:9000"   # API для завантаження файлів/моделей
+      - "9001:9001"   # Веб-інтерфейс (консоль)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  smart-glove-ml:
+    image: dmytrokyryliuk/smart-glove-ml:test_mac
+    container_name: smart-glove-ml
+    ports:
+      - "8000:8000"   # Порт для ML API
+    depends_on:
+      - rabbitmq
+      - minio
+    mem_limit: 4g
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  minio-data:

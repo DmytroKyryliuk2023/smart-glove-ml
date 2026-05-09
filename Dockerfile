@@ -7,9 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ .
 
-ENV FASTAPI_HOST=0.0.0.0
-ENV FASTAPI_PORT=8000
-
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn main:app --host $FASTAPI_HOST --port $FASTAPI_PORT"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 8000"]

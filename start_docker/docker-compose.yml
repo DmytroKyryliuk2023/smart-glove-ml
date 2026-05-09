@@ -40,7 +40,7 @@ services:
     image: dmytrokyryliuk/smart-glove-ml:test_mac
     container_name: smart-glove-ml
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       - rabbitmq
       - minio

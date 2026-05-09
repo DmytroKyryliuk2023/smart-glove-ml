@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
 
   smart-glove-ml:
-    image: dmytrokyryliuk/smart-glove-ml:v3.0
+    image: dmytrokyryliuk/smart-glove-ml:latest
     container_name: smart-glove-ml
     expose:
       - "8000"

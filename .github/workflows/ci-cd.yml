@@ -52,9 +52,9 @@ jobs:
       # Крок 7: Запуск інтеграційних тестів
       - name: Run integration tests
         run: |
-          docker-compose -f ./start_docker/docker-compose.yml up -d
+          docker compose -f ./start_docker/docker-compose.yml up -d
           pytest tests/integration -v
-          docker-compose -f ./start_docker/docker-compose.yml down -v
+          docker compose -f ./start_docker/docker-compose.yml down -v
 
       # Крок 8: Тегування Docker образу
       - name: Tag Docker image

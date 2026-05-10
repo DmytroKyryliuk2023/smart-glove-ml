@@ -39,6 +39,7 @@ services:
   smart-glove-ml:
     image: dmytrokyryliuk/smart-glove-ml:latest
     container_name: smart-glove-ml
+    platform: linux/amd64
     expose:
       - "8000"
     depends_on:

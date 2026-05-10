@@ -35,6 +35,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
+          cache: 'pip'
 
       # Крок 4: Встановлення залежностей
       - name: Install dependencies
@@ -44,25 +45,34 @@ jobs:
       - name: Run unit tests
         run: pytest tests/unit -v
       
-      # Крок 6: Збірка проєкту
+      # Крок 6: Налаштування Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      # Крок 7: Збірка проєкту
       - name: Build project
-        run: |
-          docker build -t dmytrokyryliuk/smart-glove-ml:latest .
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: dmytrokyryliuk/smart-glove-ml:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # Крок 7: Запуск інтеграційних тестів
+      # Крок 8: Запуск інтеграційних тестів
       - name: Run integration tests
         run: |
           docker compose -f ./start_docker/docker-compose.yml up -d
           pytest tests/integration -v
           docker compose -f ./start_docker/docker-compose.yml down -v
 
-      # Крок 8: Тегування Docker образу
+      # Крок 9: Тегування Docker образу
       - name: Tag Docker image
         run: |
           docker tag dmytrokyryliuk/smart-glove-ml:latest \
           dmytrokyryliuk/smart-glove-ml:${{ github.sha }}
 
-      # Крок 9: Публікація Docker образу на Docker Hub
+      # Крок 10: Публікація Docker образу на Docker Hub
       - name: Publish Docker image
         run: |
           docker login -u dmytrokyryliuk -p ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}

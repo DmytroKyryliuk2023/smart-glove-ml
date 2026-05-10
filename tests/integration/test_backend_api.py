@@ -55,12 +55,34 @@ def docker_compose_command(args, capture_output: bool = False) -> str:
     ) from last_error
 
 
+def wait_for_backend_ready(timeout: int = 120):
+    """Wait for the backend to be ready by checking logs for initialization message."""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            result = subprocess.run(
+                ["docker", "logs", "smartglove-backend"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if "Ініціалізація системи успішно завершена!" in result.stdout:
+                return
+        except subprocess.CalledProcessError:
+            pass  # Container might not be ready yet
+        time.sleep(2)
+    raise RuntimeError("Backend did not initialize within the timeout period")
+
+
 @pytest.fixture(scope="session")
 def docker_compose():
     docker_compose_command(["up", "-d", "--build"])
 
-    # Просто чекаємо 30 секунд поки backend стартує
-    time.sleep(15)
+    # Чекаємо поки backend не виведе повідомлення про ініціалізацію
+    wait_for_backend_ready()
+
+    # Додатковий час для стабілізації системи
+    time.sleep(10)
 
     try:
         yield
@@ -99,12 +121,15 @@ def test_full_system_integration(docker_compose):
             "Authorization": f"Bearer {token}",
         }
 
+        # Додатковий час після реєстрації
+        time.sleep(2)
+
         init_response = client.post(
             f"{BASE_URL}/api/predict/init/default",
             headers=headers,
         )
 
-        assert init_response.status_code == 200, init_response.text
+        assert init_response.status_code == 200, f"Init failed: {init_response.text}"
         assert init_response.json().get("status") == "SUCCESS"
 
         time.sleep(5)

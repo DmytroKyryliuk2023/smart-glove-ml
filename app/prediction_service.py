@@ -1,7 +1,7 @@
 import asyncio
 import numpy as np
 import pandas as pd
-import models
+from . import models
 
 
 class PredictionService:

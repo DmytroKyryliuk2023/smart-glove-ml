@@ -7,7 +7,7 @@ import numpy as np
 from minio import Minio
 from tensorflow.keras.models import load_model as tf_load_model, save_model as tf_save_model
 
-import models
+from . import models
 
 
 class ModelMinIOStorage:

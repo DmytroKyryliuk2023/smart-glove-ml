@@ -5,10 +5,10 @@ import os
 
 from fastapi import FastAPI, HTTPException, status
 
-import models
-from rabbitmq_service import RabbitMQService
-from training_service import TrainingService
-from prediction_service import PredictionService
+from . import models
+from .rabbitmq_service import RabbitMQService
+from .training_service import TrainingService
+from .prediction_service import PredictionService
 
 
 RABBIT_URL = os.getenv("RABBITMQ_URL")
@@ -22,7 +22,7 @@ training_service = TrainingService(
     minio_endpoint=MINIO_ENDPOINT,
     minio_access_key=MINIO_ACCESS_KEY,
     minio_secret_key=MINIO_SECRET_KEY,
-    server_endpoint=SERVER_ENDPOINT
+    server_endpoint=SERVER_ENDPOINT,
 )
 prediction_service = PredictionService()
 local_models: dict[str, models.Model] = {}
@@ -33,20 +33,16 @@ async def process_message(message):
         try:
             body = json.loads(message.body.decode())
             model_id = body.get("modelId")
-            
+
             await training_service.train_model(model_id)
-            
-            result = {
-                "modelId": model_id,
-                "status": "SUCCESS",
-                "errorMessage": None
-            }
+
+            result = {"modelId": model_id, "status": "SUCCESS", "errorMessage": None}
             await rabbitmq.publish_result("train_results_queue", result)
-            
+
         except Exception as e:
             error_message = str(e)
             print(f"Consumer error: {e}")
-            
+
             result = {
                 "modelId": body.get("modelId"),
                 "status": "FAILED",
@@ -73,7 +69,7 @@ async def init_model(model_id: str):
     try:
         if model_id in local_models:
             return {"message": "Model already initialized"}
-        
+
         local_models[model_id] = await training_service.storage.load_model(model_id)
         print(f"Модель {model_id} завантажена в пам'ять")
         return {"message": "Model initialized successfully"}

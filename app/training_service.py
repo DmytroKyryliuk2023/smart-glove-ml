@@ -7,8 +7,8 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.models import Sequential
 
-import models
-from storages import ModelMinIOStorage
+from . import models
+from .storages import ModelMinIOStorage
 
 
 class TrainingService:

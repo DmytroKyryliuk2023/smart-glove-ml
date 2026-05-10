@@ -19,7 +19,7 @@ jobs:
       # Крок 2: Створення .env файлу з секретами
       - name: Create .env file from secrets
         run: |
-          cat > .env <<EOF
+          cat > start_docker/.env <<EOF
           MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
           MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
           RABBITMQ_DEFAULT_USER=${{ secrets.RABBITMQ_DEFAULT_USER }}
@@ -62,9 +62,9 @@ jobs:
       # Крок 8: Запуск інтеграційних тестів
       - name: Run integration tests
         run: |
-          docker compose -f ./start_docker/docker-compose.yml up -d
+          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env up -d
           pytest tests/integration -v
-          docker compose -f ./start_docker/docker-compose.yml down -v
+          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env down -v
 
       # Крок 9: Тегування Docker образу
       - name: Tag Docker image

@@ -60,7 +60,7 @@ def docker_compose():
     docker_compose_command(["up", "-d", "--build"])
 
     # Просто чекаємо 30 секунд поки backend стартує
-    time.sleep(30)
+    time.sleep(15)
 
     try:
         yield

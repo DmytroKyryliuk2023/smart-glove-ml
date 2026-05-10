@@ -1,0 +1,69 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build-test-publish:
+    name: Build, Test and Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      # Крок 1: Отримання коду з репозиторію
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Крок 2: Створення .env файлу з секретами
+      - name: Create .env file from secrets
+        run: |
+          cat > .env <<EOF
+          MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          RABBITMQ_DEFAULT_USER=${{ secrets.RABBITMQ_DEFAULT_USER }}
+          RABBITMQ_DEFAULT_PASS=${{ secrets.RABBITMQ_DEFAULT_PASS }}
+          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          JWT_EXPIRATION=${{ secrets.JWT_EXPIRATION }}
+          EOF
+
+      # Крок 3: Налаштування Python
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      # Крок 4: Встановлення залежностей
+      - name: Install dependencies
+        run: pip install -r requirements.dev.txt
+
+      # Крок 5: Запуск модульних тестів
+      - name: Run unit tests
+        run: pytest tests/unit -v
+      
+      # Крок 6: Збірка проєкту
+      - name: Build project
+        run: |
+          docker build -t dmytrokyryliuk/smart-glove-ml:latest .
+
+      # Крок 7: Запуск інтеграційних тестів
+      - name: Run integration tests
+        run: |
+          docker-compose -f ./start_docker/docker-compose.yml up -d
+          pytest tests/integration -v
+          docker-compose -f ./start_docker/docker-compose.yml down -v
+
+      # Крок 8: Тегування Docker образу
+      - name: Tag Docker image
+        run: |
+          docker tag dmytrokyryliuk/smart-glove-ml:latest \
+          dmytrokyryliuk/smart-glove-ml:${{ github.sha }}
+
+      # Крок 9: Публікація Docker образу на Docker Hub
+      - name: Publish Docker image
+        run: |
+          docker login -u dmytrokyryliuk -p ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+          docker push dmytrokyryliuk/smart-glove-ml:${{ github.sha }}

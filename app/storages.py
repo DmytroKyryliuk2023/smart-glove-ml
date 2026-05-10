@@ -7,7 +7,7 @@ import numpy as np
 from minio import Minio
 from tensorflow.keras.models import load_model as tf_load_model, save_model as tf_save_model
 
-import models as Models
+import models
 
 
 class ModelMinIOStorage:
@@ -20,7 +20,7 @@ class ModelMinIOStorage:
         except Exception as e:
             print(f"Failed to create bucket: {e}")
 
-    async def save_model(self, model_id: str, model: Models.Model):
+    async def save_model(self, model_id: str, model: models.Model):
         """Зберігає модель в MinIO"""
         
         def _save_sync():
@@ -55,7 +55,7 @@ class ModelMinIOStorage:
         await asyncio.to_thread(_save_sync)
         print(f"Model {model_id} saved to MinIO")
 
-    async def load_model(self, model_id: str) -> Models.Model:
+    async def load_model(self, model_id: str) -> models.Model:
         """Завантажує модель з MinIO"""
         
         def _load_sync():
@@ -86,6 +86,6 @@ class ModelMinIOStorage:
                 scaler = joblib.load(scaler_path)
                 classes = np.load(classes_path, allow_pickle=True)
                 
-                return Models.Model(model=keras_model, scaler=scaler, classes=classes)
+                return models.Model(model=keras_model, scaler=scaler, classes=classes)
         
         return await asyncio.to_thread(_load_sync)

@@ -7,7 +7,7 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.models import Sequential
 
-import models as Models
+import models
 from storages import ModelMinIOStorage
 
 
@@ -45,7 +45,7 @@ class TrainingService:
         if not gestures:
             raise Exception("Отримано порожні дані для тренування")
 
-        model = Models.Model(model=None, scaler=None, classes=None)
+        model = models.Model(model=None, scaler=None, classes=None)
         samples, labels = [], []
 
         for label, sequences in gestures.items():
@@ -55,7 +55,7 @@ class TrainingService:
                     print(f"Пропускаю {label} — неправильна кількість колонок {df.shape[1]}")
                     continue
 
-                df_resampled = Models.resample_sequence(df, self.SEQUENCE_LENGTH)
+                df_resampled = models.resample_sequence(df, self.SEQUENCE_LENGTH)
                 if df_resampled.shape != (self.SEQUENCE_LENGTH, self.EXPECTED_COLUMNS):
                     print(f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}")
                     continue

@@ -5,7 +5,7 @@ import os
 
 from fastapi import FastAPI, HTTPException, status
 
-import models as Models
+import models
 from rabbitmq_service import RabbitMQService
 from training_service import TrainingService
 from prediction_service import PredictionService
@@ -25,7 +25,7 @@ training_service = TrainingService(
     server_endpoint=SERVER_ENDPOINT
 )
 prediction_service = PredictionService()
-local_models: dict[str, Models.Model] = {}
+local_models: dict[str, models.Model] = {}
 
 
 async def process_message(message):
@@ -98,7 +98,7 @@ async def delete_model(model_id: str):
 
 
 @app.post("/predict")
-async def predict_gesture(gesture: Models.GestureData):
+async def predict_gesture(gesture: models.GestureData):
     model_id, gesture_data = gesture.modelId, gesture.rawData
 
     if model_id not in local_models:

@@ -1,18 +1,18 @@
 import asyncio
 import numpy as np
 import pandas as pd
-import models as Models
+import models
 
 
 class PredictionService:
     SEQUENCE_LENGTH = 50
 
-    async def predict(self, model: Models.Model, gesture_data: list):
+    async def predict(self, model: models.Model, gesture_data: list):
         return await asyncio.to_thread(self._predict_sync, model, gesture_data)
 
-    def _predict_sync(self, model: Models.Model, gesture_data: list):
+    def _predict_sync(self, model: models.Model, gesture_data: list):
         df = pd.DataFrame(gesture_data)
-        df_resampled = Models.resample_sequence(df, self.SEQUENCE_LENGTH)
+        df_resampled = models.resample_sequence(df, self.SEQUENCE_LENGTH)
 
         input_data = df_resampled.values.astype(float)
         data_scaled = np.clip(model.scaler.transform(input_data), -1, 1)

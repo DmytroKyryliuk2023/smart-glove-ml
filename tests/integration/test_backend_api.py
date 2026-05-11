@@ -65,7 +65,9 @@ def wait_for_backend_ready(timeout: int = 120):
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=30
             )
+            print(result.stdout)  # Log output for debugging
             if "Ініціалізація системи успішно завершена!" in result.stdout:
                 return
         except subprocess.CalledProcessError:

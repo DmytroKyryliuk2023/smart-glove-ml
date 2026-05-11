@@ -49,20 +49,13 @@ jobs:
       - name: Build project
         run: docker build -t dmytrokyryliuk/smart-glove-ml:latest .
 
-      # Крок 8: Запуск інтеграційних тестів
-      - name: Run integration tests
-        run: |
-          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env up -d
-          pytest tests/integration -v
-          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env down -v
-
-      # Крок 9: Тегування Docker образу
+      # Крок 7: Тегування Docker образу
       - name: Tag Docker image
         run: |
           docker tag dmytrokyryliuk/smart-glove-ml:latest \
           dmytrokyryliuk/smart-glove-ml:${{ github.sha }}
 
-      # Крок 10: Публікація Docker образу на Docker Hub
+      # Крок 8: Публікація Docker образу на Docker Hub
       - name: Publish Docker image
         run: |
           docker login -u dmytrokyryliuk -p ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}

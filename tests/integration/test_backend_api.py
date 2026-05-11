@@ -95,6 +95,28 @@ def load_test_gesture():
         return json.load(f)
 
 
+def wait_for_initialization(client: httpx.Client, headers: dict, timeout: int = 60):
+    start_time = time.time()
+    last_response = None
+
+    while time.time() - start_time < timeout:
+        response = client.post(
+            f"{BASE_URL}/api/predict/init/default",
+            headers=headers,
+        )
+
+        if response.status_code == 200:
+            return response
+
+        last_response = response
+        if response.status_code not in {403, 404, 502, 503, 504}:
+            break
+
+        time.sleep(3)
+
+    return last_response
+
+
 @pytest.mark.integration
 def test_full_system_integration(docker_compose):
     email = f"pytest+{uuid.uuid4().hex[:8]}@example.com"
@@ -121,14 +143,12 @@ def test_full_system_integration(docker_compose):
             "Authorization": f"Bearer {token}",
         }
 
-        # Додатковий час після реєстрації
-        time.sleep(2)
+        # Додатковий час після реєстрації, щоб бекенд закінчив асинхронні налаштування
+        time.sleep(5)
 
-        init_response = client.post(
-            f"{BASE_URL}/api/predict/init/default",
-            headers=headers,
-        )
+        init_response = wait_for_initialization(client, headers)
 
+        assert init_response is not None, "Init request did not return any response"
         assert init_response.status_code == 200, f"Init failed: {init_response.text}"
         assert init_response.json().get("status") == "SUCCESS"
 

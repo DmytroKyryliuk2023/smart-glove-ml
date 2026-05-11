@@ -56,24 +56,34 @@ def docker_compose_command(args, capture_output: bool = False) -> str:
 
 
 def wait_for_backend_ready(timeout: int = 120):
-    """Wait for the backend to be ready by checking logs for initialization message."""
+    last_logs = None
+    stable_count = 0
     start_time = time.time()
+
     while time.time() - start_time < timeout:
-        try:
-            result = subprocess.run(
-                ["docker", "logs", "smartglove-backend"],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=30
-            )
-            print(result.stdout)  # Log output for debugging
-            if "Ініціалізація системи успішно завершена!" in result.stdout:
-                return
-        except subprocess.CalledProcessError:
-            pass  # Container might not be ready yet
-        time.sleep(2)
-    raise RuntimeError("Backend did not initialize within the timeout period")
+        result = subprocess.run(
+            ["docker", "logs", "smartglove-backend"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        logs = result.stdout[-500:]  # беремо останній "хвіст"
+
+        # якщо логі не змінюються
+        if logs == last_logs:
+            stable_count += 1
+        else:
+            stable_count = 0
+            last_logs = logs
+
+        # якщо стабільні 3 цикли підряд → вважаємо що сервер "заспокоївся"
+        if stable_count >= 3:
+            return
+
+        time.sleep(10)
+
+    raise RuntimeError("Backend did not stabilize within timeout")
 
 
 @pytest.fixture(scope="session")

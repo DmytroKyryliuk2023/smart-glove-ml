@@ -80,8 +80,10 @@ def wait_for_backend_ready(timeout: int = 120):
         # якщо стабільні 3 цикли підряд → вважаємо що сервер "заспокоївся"
         if stable_count >= 3:
             return
+        
+        print(f"Waiting for backend to stabilize... (stable count: {stable_count})")
 
-        time.sleep(10)
+        time.sleep(2)
 
     raise RuntimeError("Backend did not stabilize within timeout")
 

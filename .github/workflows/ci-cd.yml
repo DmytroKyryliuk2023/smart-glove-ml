@@ -35,7 +35,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-          cache: 'pip'
 
       # Крок 4: Встановлення залежностей
       - name: Install dependencies
@@ -45,19 +44,9 @@ jobs:
       - name: Run unit tests
         run: pytest tests/unit -v
       
-      # Крок 6: Налаштування Docker Buildx
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      # Крок 7: Збірка проєкту
+      # Крок 6: Збірка проєкту
       - name: Build project
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: dmytrokyryliuk/smart-glove-ml:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: docker build -t dmytrokyryliuk/smart-glove-ml:latest .
 
       # Крок 8: Запуск інтеграційних тестів
       - name: Run integration tests

@@ -78,6 +78,9 @@ def wait_for_backend_ready(timeout: int = 120):
 def docker_compose():
     docker_compose_command(["up", "-d", "--build"])
     
+    # Додатковий час для стабілізації системи
+    time.sleep(10)
+    
     # Чекаємо поки backend не виведе повідомлення про ініціалізацію
     wait_for_backend_ready()
 

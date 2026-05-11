@@ -105,28 +105,7 @@ pip install -r requirements_dev.txt
 
 ## ⚙️ Налаштування
 
-Створіть файл `.env` в кореневій директорії проєкту з наступними змінними:
-
-```bash
-# RabbitMQ
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
-RABBITMQ_DEFAULT_USER=guest
-RABBITMQ_DEFAULT_PASS=guest
-
-# MinIO
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin
-
-# MongoDB
-MONGO_INITDB_ROOT_USERNAME=admin
-MONGO_INITDB_ROOT_PASSWORD=password
-
-# Server
-SERVER_ENDPOINT=http://localhost:8080
-```
+Створіть файл `.env` в кореневій директорії проєкту.
 
 ## 🚀 Запуск
 

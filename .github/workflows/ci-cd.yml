@@ -53,6 +53,10 @@ jobs:
       - name: Run integration tests
         run: |
           docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env up -d
+          echo "Waiting for services to be ready..."
+          sleep 15
+          echo "Services status:"
+          docker compose -f ./start_docker/docker-compose.yml ps
           pytest tests/integration -v
           docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env down -v
 

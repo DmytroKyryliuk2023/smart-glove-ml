@@ -110,24 +110,17 @@ pip install -r requirements_dev.txt
 Створіть файл `.env` в кореневій директорії проєкту з наступними змінними:
 
 ```bash
-# RabbitMQ
-RABBITMQ_URL=amqp://guest:guest@localhost:5672/
-RABBITMQ_DEFAULT_USER=guest
-RABBITMQ_DEFAULT_PASS=guest
+MONGO_INITDB_ROOT_USERNAME
+MONGO_INITDB_ROOT_PASSWORD
 
-# MinIO
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin
+RABBITMQ_DEFAULT_USER
+RABBITMQ_DEFAULT_PASS
 
-# MongoDB
-MONGO_INITDB_ROOT_USERNAME=admin
-MONGO_INITDB_ROOT_PASSWORD=password
+MINIO_ROOT_USER
+MINIO_ROOT_PASSWORD
 
-# Server
-SERVER_ENDPOINT=http://localhost:8080
+JWT_SECRET_KEY
+JWT_EXPIRATION
 ```
 
 ## 🚀 Запуск
@@ -212,6 +205,27 @@ Content-Type: application/json
   "errorMessage": null
 }
 ```
+
+## Лінтинг
+
+У цьому проєкті використовується `ruff` для перевірки стилю, форматування та швидкого виявлення проблем у коді Python.
+
+### Запуск `ruff`
+
+```bash
+ruff check app tests
+```
+
+### Виправлення проблем автоматично
+
+```bash
+ruff check app tests --fix
+```
+
+### Рекомендації
+
+- Виконуйте `ruff` разом із `pytest` перед комітом.
+- Додайте `ruff` до CI/CD для автоматичної перевірки якості коду.
 
 ## ✅ Тестування
 

@@ -15,7 +15,13 @@ class TrainingService:
     SEQUENCE_LENGTH = 50
     EXPECTED_COLUMNS = 18
 
-    def __init__(self, minio_endpoint: str, minio_access_key: str, minio_secret_key: str, server_endpoint: str):
+    def __init__(
+        self,
+        minio_endpoint: str,
+        minio_access_key: str,
+        minio_secret_key: str,
+        server_endpoint: str,
+    ):
         self.storage = ModelMinIOStorage(
             Minio(
                 minio_endpoint,
@@ -26,7 +32,7 @@ class TrainingService:
             "gesture-models",
         )
         self.server_endpoint = server_endpoint
-        
+
     async def fetch_training_data(self, model_id: str):
         async with httpx.AsyncClient() as client:
             url = f"{self.server_endpoint}/api/v1/internal/models/{model_id}/training-data"
@@ -52,12 +58,16 @@ class TrainingService:
             for seq in sequences:
                 df = pd.DataFrame(seq)
                 if df.shape[1] != self.EXPECTED_COLUMNS:
-                    print(f"Пропускаю {label} — неправильна кількість колонок {df.shape[1]}")
+                    print(
+                        f"Пропускаю {label} — неправильна кількість колонок {df.shape[1]}"
+                    )
                     continue
 
                 df_resampled = models.resample_sequence(df, self.SEQUENCE_LENGTH)
                 if df_resampled.shape != (self.SEQUENCE_LENGTH, self.EXPECTED_COLUMNS):
-                    print(f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}")
+                    print(
+                        f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}"
+                    )
                     continue
 
                 samples.append(df_resampled.values.astype(float))
@@ -77,7 +87,11 @@ class TrainingService:
             raise Exception("Кожен клас повинен мати мінімум 2 приклади")
 
         X_train, X_test, y_train, y_test = train_test_split(
-            samples, y, test_size=0.2, random_state=42, stratify=y,
+            samples,
+            y,
+            test_size=0.2,
+            random_state=42,
+            stratify=y,
         )
 
         model.scaler = MinMaxScaler(feature_range=(-1, 1))
@@ -89,25 +103,34 @@ class TrainingService:
 
         model.scaler.fit(X_train_2d)
         X_train_scaled = model.scaler.transform(X_train_2d).reshape(N_train, T, F)
-        X_test_scaled = np.clip(model.scaler.transform(X_test_2d).reshape(N_test, T, F), -1, 1)
+        X_test_scaled = np.clip(
+            model.scaler.transform(X_test_2d).reshape(N_test, T, F), -1, 1
+        )
 
-        model.model = Sequential([
-            Input(shape=(T, F)),
-            LSTM(32, return_sequences=False),
-            Dropout(0.3),
-            Dense(64, activation="relu"),
-            Dropout(0.2),
-            Dense(len(np.unique(y)), activation="softmax"),
-        ])
+        model.model = Sequential(
+            [
+                Input(shape=(T, F)),
+                LSTM(32, return_sequences=False),
+                Dropout(0.3),
+                Dense(64, activation="relu"),
+                Dropout(0.2),
+                Dense(len(np.unique(y)), activation="softmax"),
+            ]
+        )
 
         model.model.compile(
-            optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+            optimizer="adam",
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
         )
 
         model.model.fit(
-            X_train_scaled, y_train,
+            X_train_scaled,
+            y_train,
             validation_data=(X_test_scaled, y_test),
-            epochs=30, batch_size=16, verbose=1,
+            epochs=30,
+            batch_size=16,
+            verbose=1,
         )
 
         _, test_accuracy = model.model.evaluate(X_test_scaled, y_test, verbose=0)

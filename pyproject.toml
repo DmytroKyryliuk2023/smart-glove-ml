@@ -1,0 +1,10 @@
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]  # errors, pyflakes, imports
+ignore = ["E501"]         # line length (Black-style)
+
+[tool.ruff.format]
+quote-style = "double"

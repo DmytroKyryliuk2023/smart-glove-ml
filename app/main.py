@@ -1,15 +1,14 @@
 import asyncio
-from contextlib import asynccontextmanager
 import json
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, status
 
 from . import models
+from .prediction_service import PredictionService
 from .rabbitmq_service import RabbitMQService
 from .training_service import TrainingService
-from .prediction_service import PredictionService
-
 
 RABBIT_URL = os.getenv("RABBITMQ_URL")
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
@@ -111,7 +110,8 @@ async def predict_gesture(gesture: models.GestureData):
     if len(gesture_data[0]) != training_service.EXPECTED_COLUMNS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Expected {training_service.EXPECTED_COLUMNS} columns, but got {len(gesture_data[0])}",
+            detail=f"Expected {training_service.EXPECTED_COLUMNS} columns, \
+                but got {len(gesture_data[0])}",
         )
 
     current_model = local_models[model_id]

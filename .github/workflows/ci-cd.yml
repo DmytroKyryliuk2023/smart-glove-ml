@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - fix/ci-cd
 
 jobs:
   build-test-publish:

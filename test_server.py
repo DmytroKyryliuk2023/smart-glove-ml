@@ -47,7 +47,6 @@ app = FastAPI(lifespan=lifespan)
 @app.post("/send-training-task")
 async def test_send_endpoint(model_id: str = "DEFAULT_SYSTEM_MODEL") -> dict:
     message_body = {
-        "taskId": "task_987654",
         "modelId": model_id
     }
 
@@ -91,15 +90,15 @@ async def consume_results():
                 
 @app.post("/init_model")
 def init(model_id: str = "DEFAULT_SYSTEM_MODEL"):
-    data = {
-        "modelId": model_id,
-        "modelUrl": "https://example.com/model.h5",
-        "scalerUrl": "https://example.com/scaler.pkl",
-        "labelsUrl": "https://example.com/labels.json"
-    }
-    response = requests.post(f"{base_url}/init", json=data)
-    
+    response = requests.post(f"{base_url}/models/{model_id}")
     return response.json()
+
+
+@app.post("/delete_model")
+def delete_model(model_id: str = "DEFAULT_SYSTEM_MODEL"):
+    response = requests.delete(f"{base_url}/models/{model_id}")
+    return response.json()
+
 
 @app.post("/predict_gesture")
 def predict(model_id: str = "DEFAULT_SYSTEM_MODEL"):

@@ -1,12 +1,85 @@
-version: '3.8'
-
 services:
-  smart-glove-ml:
-    image: dmytrokyryliuk/smart-glove-ml:v2.0
+  mongodb:
+    image: mongo:7.0
+    container_name: smartglove-mongodb
     ports:
-      - "8000:8000"
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartglove-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    container_name: smartglove-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  smart-glove-ml:
+    image: dmytrokyryliuk/smart-glove-ml:latest
+    platform: linux/amd64
+    container_name: smart-glove-ml
+    expose:
+      - "8000"
     depends_on:
-    - rabbitmq
-    - minio
+      - rabbitmq
+      - minio
+    environment:
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      - SERVER_ENDPOINT=http://smartglove-backend:8080
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
     mem_limit: 4g
     restart: unless-stopped
+
+  smartglove-backend:
+    image: rozzzchepiy/smartglove-backend:latest
+    container_name: smartglove-backend
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - minio
+    environment:
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      MONGO_USER: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      AI_SERVER_URL: http://smart-glove-ml:8000
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  minio-data:

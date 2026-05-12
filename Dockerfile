@@ -1,15 +1,12 @@
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app/ .
-
-ENV FASTAPI_HOST=0.0.0.0
-ENV FASTAPI_PORT=8000
+COPY app/ ./app
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn main:app --host $FASTAPI_HOST --port $FASTAPI_PORT"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

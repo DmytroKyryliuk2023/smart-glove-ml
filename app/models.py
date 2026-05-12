@@ -14,13 +14,6 @@ class Model():
     classes: np.ndarray
     
 
-class InitModelRequest(BaseModel):
-    modelId: str
-    modelUrl: str
-    scalerUrl: str
-    labelsUrl: str
-
-
 class GestureData(BaseModel):
     modelId: str
     rawData: list[list[float]]

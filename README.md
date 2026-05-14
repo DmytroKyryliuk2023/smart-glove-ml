@@ -53,6 +53,7 @@ Smart Glove ML — це бекенд-сервіс для машинного на
 ├─────────────────────────────────────┤
 │        External Services            │
 ├─────────────────────────────────────┤
+│  ├─ SmartGlove Backend              │
 │  ├─ RabbitMQ (Message Queue)        │
 │  ├─ MinIO (Model Storage)           │
 │  └─ MongoDB (Data Storage)          │
@@ -71,6 +72,7 @@ Smart Glove ML — це бекенд-сервіс для машинного на
 ## 📦 Вимоги
 
 - Python 3.12+
+- SmartGlove Backend
 - RabbitMQ
 - MinIO
 - MongoDB (опціонально)
@@ -102,7 +104,7 @@ pip install -r requirements.txt
 Для розробки встановіть також залежності для тестування:
 
 ```bash
-pip install -r requirements_dev.txt
+pip install -r requirements.dev.txt
 ```
 
 ## ⚙️ Налаштування
@@ -319,6 +321,7 @@ docker-compose up -d
 Сервіси будуть доступні за адресами:
 
 - **Smart Glove ML API**: http://localhost:8000
+- **Smart Glove Backend**: http://localhost:8080
 - **RabbitMQ Management**: http://localhost:15672
 - **MinIO Web UI**: http://localhost:9001
 - **MongoDB**: localhost:27018
@@ -370,16 +373,6 @@ pip install new-package
 
 # Оновіть requirements.txt
 pip freeze > requirements.txt
-```
-
-### Форматування коду
-
-```bash
-# Перевірка з black
-black app/ tests/
-
-# Перевірка з flake8
-flake8 app/ tests/
 ```
 
 ## 📝 Ліцензія

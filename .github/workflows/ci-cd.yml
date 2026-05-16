@@ -5,11 +5,16 @@ on:
     branches:
       - main
       - develop
+  pull_request:
+    branches:
+      - main
+      - develop
 
 jobs:
   build-test-publish:
     name: Build, Test and Publish
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
       - name: Checkout repository

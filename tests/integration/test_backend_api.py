@@ -67,7 +67,7 @@ def wait_for_backend_ready(timeout: int = 120):
                 text=True,
                 check=True,
             )
-            if re.search(r"Ініціалізація системи успішно завершена!", result.stdout):
+            if re.search(r"Ініціалізація системи успішно завершена", result.stdout):
                 return
         except subprocess.CalledProcessError:
             pass  # Container might not be ready yet

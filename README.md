@@ -1,6 +1,6 @@
 # Smart Glove ML
 
-[![CI/CD Pipeline](https://github.com/DmytroKyryliuk2023/smart-glove-ml/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/DmytroKyryliuk2023/smart-glove-ml/actions/workflows/ci-cd.yml)
+[![Dev CI Pipeline](https://github.com/DmytroKyryliuk2023/smart-glove-ml/actions/workflows/dev-ci.yml/badge.svg)](https://github.com/DmytroKyryliuk2023/smart-glove-ml/actions/workflows/dev-ci.yml)
 
 Машинне навчання для розпізнавання жестів розумної рукавиці. ML-сервіс для розпізнавання та класифікації жестів з гру рукавиці, побудований на FastAPI з використанням TensorFlow/Keras.
 

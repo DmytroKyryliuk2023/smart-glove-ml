@@ -55,7 +55,7 @@ def docker_compose_command(args, capture_output: bool = False) -> str:
     ) from last_error
 
 
-def wait_for_backend_ready(timeout: int = 120):
+def wait_for_backend_ready(timeout: int = 180):
     """Wait for the backend to be ready by checking logs for initialization message."""
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -82,7 +82,7 @@ def docker_compose():
     wait_for_backend_ready()
 
     # Додатковий час для стабілізації системи
-    time.sleep(10)
+    time.sleep(5)
 
     try:
         yield

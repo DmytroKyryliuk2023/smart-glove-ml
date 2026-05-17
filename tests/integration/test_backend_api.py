@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import time
 import uuid
@@ -55,7 +56,7 @@ def docker_compose_command(args, capture_output: bool = False) -> str:
     ) from last_error
 
 
-def wait_for_backend_ready(timeout: int = 180):
+def wait_for_backend_ready(timeout: int = 120):
     """Wait for the backend to be ready by checking logs for initialization message."""
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -66,7 +67,7 @@ def wait_for_backend_ready(timeout: int = 180):
                 text=True,
                 check=True,
             )
-            if "Ініціалізація системи успішно завершена!" in result.stdout:
+            if re.search(r"Ініціалізація системи успішно завершена!", result.stdout):
                 return
         except subprocess.CalledProcessError:
             pass  # Container might not be ready yet
@@ -82,7 +83,7 @@ def docker_compose():
     wait_for_backend_ready()
 
     # Додатковий час для стабілізації системи
-    time.sleep(5)
+    time.sleep(2)
 
     try:
         yield

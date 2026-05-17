@@ -1,0 +1,35 @@
+name: 'Python Setup with Dependencies'
+description: 'Setup Python, install dependencies and create .env'
+
+inputs:
+  python-version:
+    description: 'Python version'
+    required: false
+    default: '3.12'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create .env file from secrets
+      shell: bash
+      run: |
+        cat > start_docker/.env <<EOF
+        MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+        MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+        RABBITMQ_DEFAULT_USER=${{ secrets.RABBITMQ_DEFAULT_USER }}
+        RABBITMQ_DEFAULT_PASS=${{ secrets.RABBITMQ_DEFAULT_PASS }}
+        MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+        MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+        JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+        JWT_EXPIRATION=${{ secrets.JWT_EXPIRATION }}
+        EOF
+
+    - name: Setup python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install -r requirements.dev.txt

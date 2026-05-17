@@ -1,18 +1,15 @@
-name: CI/CD Pipeline
+name: Prod CI Pipeline
 
 on:
   push:
     branches:
       - main
-      - develop
   pull_request:
     branches:
       - main
-      - develop
 
 jobs:
   build-test-publish:
-    name: Build, Test and Publish
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
@@ -20,27 +17,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create .env file from secrets
-        run: |
-          cat > start_docker/.env <<EOF
-          MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
-          MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
-          RABBITMQ_DEFAULT_USER=${{ secrets.RABBITMQ_DEFAULT_USER }}
-          RABBITMQ_DEFAULT_PASS=${{ secrets.RABBITMQ_DEFAULT_PASS }}
-          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
-          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
-          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-          JWT_EXPIRATION=${{ secrets.JWT_EXPIRATION }}
-          EOF
-
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: pip install -r requirements.dev.txt
+      - name: Setup Python environment
+        uses: ./.github/actions/python-setup
 
       - name: Run ruff linting
         run: ruff check ./app

@@ -1,0 +1,27 @@
+name: Dev CI Pipeline
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python environment
+        uses: ./.github/actions/python-setup
+
+      - name: Run ruff linting
+        run: ruff check ./app
+
+      - name: Run unit tests
+        run: pytest tests/unit -v

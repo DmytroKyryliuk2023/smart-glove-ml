@@ -9,49 +9,8 @@ on:
       - main
 
 jobs:
-  build-test-publish:
-    runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python environment
-        uses: ./.github/actions/python-setup
-
-      - name: Run ruff linting
-        run: ruff check ./app
-
-      - name: Run unit tests
-        run: pytest tests/unit -v
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Build project
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          load: true
-          tags: dmytrokyryliuk/smart-glove-ml:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Run integration tests
-        run: |
-          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env up -d
-          pytest tests/integration -v
-          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env down -v
-
-      - name: Tag Docker image
-        run: |
-          docker tag dmytrokyryliuk/smart-glove-ml:latest \
-          dmytrokyryliuk/smart-glove-ml:${{ github.sha }}
-
-      - name: Publish Docker image
-        run: |
-          docker login -u dmytrokyryliuk -p ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
-          docker push dmytrokyryliuk/smart-glove-ml:${{ github.sha }}
-          docker push dmytrokyryliuk/smart-glove-ml:latest
+  test-build-publish:
+    uses: ./.github/workflows/ci-base.yml
+    with:
+      run_integration: true
+      environment: 'prod'

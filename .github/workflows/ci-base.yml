@@ -1,0 +1,85 @@
+name: CI Base
+
+on:
+  workflow_call:
+    inputs:
+      run_integration:
+        description: 'Run integration tests'
+        required: true
+        type: boolean
+      environment:
+        description: 'Environment name'
+        required: true
+        type: string
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file from secrets
+        run: |
+          cat > start_docker/.env <<EOF
+          MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          RABBITMQ_DEFAULT_USER=${{ secrets.RABBITMQ_DEFAULT_USER }}
+          RABBITMQ_DEFAULT_PASS=${{ secrets.RABBITMQ_DEFAULT_PASS }}
+          MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          JWT_EXPIRATION=${{ secrets.JWT_EXPIRATION }}
+          EOF
+
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.dev.txt
+
+      - name: Run ruff linting
+        run: ruff check ./app
+
+      - name: Run unit tests
+        run: pytest tests/unit -v
+
+      - name: Set up Docker Buildx
+        if: inputs.run_integration == true
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build project
+        if: inputs.run_integration == true
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: dmytrokyryliuk/smart-glove-ml:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run integration tests
+        if: inputs.run_integration == true
+        run: |
+          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env up -d
+          pytest tests/integration -v
+          docker compose -f ./start_docker/docker-compose.yml --env-file ./start_docker/.env down -v
+
+      - name: Tag Docker image
+        if: inputs.run_integration == true && inputs.environment == 'prod'
+        run: |
+          docker tag dmytrokyryliuk/smart-glove-ml:latest \
+          dmytrokyryliuk/smart-glove-ml:${{ github.sha }}
+
+      - name: Publish Docker image
+        if: inputs.run_integration == true && inputs.environment == 'prod'
+        run: |
+          docker login -u dmytrokyryliuk -p ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+          docker push dmytrokyryliuk/smart-glove-ml:${{ github.sha }}
+          docker push dmytrokyryliuk/smart-glove-ml:latest

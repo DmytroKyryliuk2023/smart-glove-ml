@@ -72,7 +72,22 @@ def wait_for_backend_ready(timeout: int = 120):
         except subprocess.CalledProcessError:
             pass  # Container might not be ready yet
         time.sleep(2)
-    raise RuntimeError("Backend did not initialize within the timeout period")
+
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "smartglove-backend", "--tail", "100"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        logs = result.stdout
+    except subprocess.CalledProcessError:
+        logs = "<unable to read backend container logs>"
+
+    raise RuntimeError(
+        "Backend did not initialize within the timeout period. "
+        f"Last backend logs:\n{logs}"
+    )
 
 
 @pytest.fixture(scope="session")

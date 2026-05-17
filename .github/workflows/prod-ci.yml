@@ -14,3 +14,4 @@ jobs:
     with:
       run_integration: true
       environment: 'prod'
+    secrets: inherit

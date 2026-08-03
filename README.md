@@ -4,183 +4,250 @@
 
 [![Prod CI Pipeline](https://github.com/DmytroKyryliuk2023/smart-glove-ml/actions/workflows/prod-ci.yml/badge.svg)](https://github.com/DmytroKyryliuk2023/smart-glove-ml/actions/workflows/prod-ci.yml)
 
-Машинне навчання для розпізнавання жестів розумної рукавиці. ML-сервіс для розпізнавання та класифікації жестів з гру рукавиці, побудований на FastAPI з використанням TensorFlow/Keras.
+Machine Learning service for Smart Glove gesture recognition. This project provides a FastAPI-based backend that trains TensorFlow/Keras models and performs real-time gesture classification using sensor data collected from a smart glove.
 
-## Таблиця змісту
+The service is designed as part of a distributed Smart Glove system and integrates with external services such as RabbitMQ, MinIO, MongoDB, and the Smart Glove Backend.
 
-- [Опис проєкту](#опис-проєкту)
-- [Особливості](#особливості)
-- [Архітектура](#архітектура)
-- [Вимоги](#вимоги)
-- [Встановлення](#встановлення)
-- [Налаштування](#налаштування)
-- [Запуск](#запуск)
-- [API документація](#api-документація)
-- [Лінтинг](#літинг)
-- [Тестування](#тестування)
-- [Структура проєкту](#структура-проєкту)
+---
+
+# Table of Contents
+
+- [Project Overview](#project-overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Technology Stack](#technology-stack)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running the Service](#running-the-service)
+- [API Documentation](#api-documentation)
+- [Testing](#testing)
+- [Linting](#linting)
+- [Project Structure](#project-structure)
 - [Docker](#docker)
+- [Sequence Normalization](#sequence-normalization)
+- [Example API Request](#example-api-request)
+- [License](#license)
 
-## Опис проєкту
+---
 
-Smart Glove ML — це бекенд-сервіс для машинного навчання, який:
+# Project Overview
 
-- **Розпізнає жести** з датчиків розумної рукавиці
-- **Тренує моделі** на основі історичних даних жестів
-- **Робить прогнози** жестів у реальному часі
-- **Зберігає моделі** в об'єктному сховищі (MinIO)
-- **Обробляє завдання** через чергу повідомлень (RabbitMQ)
-- **Нормалізує послідовності** даних датчиків до стандартної довжини
+Smart Glove ML is responsible for the machine learning functionality of the Smart Glove ecosystem.
 
-## Особливості
+The service provides:
 
-- **FastAPI** — сучасний веб-фреймворк для побудови API
-- **TensorFlow/Keras** — глибоке навчання для розпізнавання жестів
-- **MinIO** — об'єктне сховище для моделей та даних
-- **RabbitMQ** — асинхронна обробка завдань тренування
-- **Scikit-learn** — попередня обробка даних і масштабування
-- **Python 3.12** — сучасна версія Python
-- **Docker** — контейнеризація для легкого розгортання
-- **Unit тести** — покриття основних компонентів
+- Gesture recognition from smart glove sensor data
+- Training TensorFlow/Keras neural network models
+- Real-time gesture prediction
+- Automatic preprocessing of time-series sensor data
+- Model storage in MinIO
+- Asynchronous training using RabbitMQ
+- REST API built with FastAPI
 
-## Архітектура
+Unlike the previous standalone Flask prototype, this service is designed as a scalable microservice that communicates with other backend components.
+
+---
+
+# Features
+
+- TensorFlow/Keras neural network for gesture recognition
+- Automatic preprocessing of sensor sequences
+- Fixed-length sequence normalization
+- FastAPI REST API
+- Real-time gesture prediction
+- Asynchronous model training
+- RabbitMQ integration
+- MinIO model storage
+- MongoDB integration
+- Docker support
+- Unit and integration tests
+- GitHub Actions CI pipelines
+
+---
+
+# Architecture
 
 ```
-┌─────────────────────────────────────┐
-│      FastAPI Application            │
-├─────────────────────────────────────┤
-│  ├─ TrainingService                 │
-│  ├─ PredictionService               │
-│  ├─ RabbitMQService                 │
-│  └─ StorageService                  │
-├─────────────────────────────────────┤
-│        External Services            │
-├─────────────────────────────────────┤
-│  ├─ SmartGlove Backend              │
-│  ├─ RabbitMQ (Message Queue)        │
-│  ├─ MinIO (Model Storage)           │
-│  └─ MongoDB (Data Storage)          │
-└─────────────────────────────────────┘
+                   Smart Glove Backend
+                           │
+                           ▼
+                    FastAPI Application
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Prediction Service                                         │
+│  Training Service                                           │
+│  RabbitMQ Service                                           │
+│  Storage Service                                            │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
+      RabbitMQ              MinIO              MongoDB
 ```
 
-### Компоненти
+Main components:
 
-- **main.py** — точка входу додатка, налаштування FastAPI
-- **models.py** — дата-класи моделей, логіка вирівнювання послідовностей
-- **training_service.py** — навчання моделей нейронних мереж
-- **prediction_service.py** — робота прогнозів на основі навчених моделей
-- **rabbitmq_service.py** — інтеграція з RabbitMQ
-- **storages.py** — робота з зберіганням в MinIO
+- **Prediction Service** – loads trained models and performs inference.
+- **Training Service** – trains new neural network models.
+- **RabbitMQ Service** – receives and publishes training jobs.
+- **Storage Service** – uploads and downloads models from MinIO.
 
-## Вимоги
+---
 
-- Python 3.12+
-- SmartGlove Backend
+# Technology Stack
+
+- Python 3.12
+- FastAPI
+- TensorFlow / Keras
+- scikit-learn
+- pandas
+- NumPy
 - RabbitMQ
 - MinIO
-- MongoDB (опціонально)
+- MongoDB
+- Docker
+- Pytest
+- Ruff
 
-## Встановлення
+---
 
-### 1. Клонування репозиторію
+# Requirements
+
+- Python 3.12+
+- RabbitMQ
+- MinIO
+- MongoDB
+- Smart Glove Backend
+
+---
+
+# Installation
+
+## Clone the repository
 
 ```bash
-git clone <repo_url>
+git clone <repository-url>
 cd smart-glove-ml
 ```
 
-### 2. Створення віртуального окруження
+## Create a virtual environment
+
+Linux/macOS
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate  # На macOS/Linux
-# або
-.venv\Scripts\activate  # На Windows
+source .venv/bin/activate
 ```
 
-### 3. Встановлення залежностей
+Windows
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+## Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Для розробки встановіть також залежності для тестування:
+Install development dependencies
 
 ```bash
-pip install -r requirements.dev.txt
+pip install -r requirements_dev.txt
 ```
 
-## Налаштування
+---
 
-Створіть файл `.env` в кореневій директорії проєкту з наступними змінними:
+# Configuration
 
-```bash
-MONGO_INITDB_ROOT_USERNAME
-MONGO_INITDB_ROOT_PASSWORD
+Create a `.env` file in the project root.
 
-RABBITMQ_DEFAULT_USER
-RABBITMQ_DEFAULT_PASS
+```env
+MONGO_INITDB_ROOT_USERNAME=
+MONGO_INITDB_ROOT_PASSWORD=
 
-MINIO_ROOT_USER
-MINIO_ROOT_PASSWORD
+RABBITMQ_DEFAULT_USER=
+RABBITMQ_DEFAULT_PASS=
 
-JWT_SECRET_KEY
-JWT_EXPIRATION
+MINIO_ROOT_USER=
+MINIO_ROOT_PASSWORD=
+
+JWT_SECRET_KEY=
+JWT_EXPIRATION=
 ```
 
-## Запуск
+---
 
-### Локальний запуск
+# Running the Service
+
+## Local
 
 ```bash
-# Активуйте віртуальне окруження
-source .venv/bin/activate
-
-# Запустіть сервер
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Сервер буде доступний за адресою `http://localhost:8000`
+The API will be available at
 
-### Запуск через Docker
+```
+http://localhost:8000
+```
+
+## Docker
 
 ```bash
-# Запустіть всі сервіси через docker-compose
 cd start_docker
-docker-compose up -d
 
-# Перевірте статус контейнерів
-docker-compose ps
+docker-compose up -d
 ```
 
-Зупинка сервісів:
+Stop the services
 
 ```bash
 docker-compose down
 ```
 
-## API документація
+---
 
-Після запуску сервера, документація доступна за адресами:
+# API Documentation
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+After starting the application:
 
-### Основні ендпоінти
+- Swagger UI
 
-#### Прогноз жесту
+```
+http://localhost:8000/docs
+```
 
-```http
+- ReDoc
+
+```
+http://localhost:8000/redoc
+```
+
+---
+
+## Predict Gesture
+
+```
 POST /predict
-Content-Type: application/json
+```
 
+Request
+
+```json
 {
   "modelId": "model_123",
-  "rawData": [[1.0, 2.0, 3.0, ...], [1.5, 2.1, 3.2, ...], ...]
+  "rawData": [
+    [1.0, 2.0, 3.0],
+    [1.2, 2.3, 3.4]
+  ]
 }
 ```
 
-**Відповідь:**
+Response
 
 ```json
 {
@@ -189,11 +256,13 @@ Content-Type: application/json
 }
 ```
 
-#### Подання завдання на тренування
+---
 
-Завдання на тренування відправляються через RabbitMQ в чергу `train_queue`.
+## Train Model
 
-Повідомлення повинно мати структуру:
+Training jobs are submitted through RabbitMQ.
+
+Example message:
 
 ```json
 {
@@ -201,7 +270,7 @@ Content-Type: application/json
 }
 ```
 
-Результати тренування публікуються в `train_results_queue`:
+Training result:
 
 ```json
 {
@@ -211,177 +280,189 @@ Content-Type: application/json
 }
 ```
 
-## Лінтинг
+---
 
-У цьому проєкті використовується `ruff` для перевірки стилю, форматування та швидкого виявлення проблем у коді Python.
+# Sequence Normalization
 
-### Запуск `ruff`
+Sensor recordings naturally vary in length. Before training or prediction, every sequence is normalized to **50 time steps**.
 
-```bash
-ruff check app tests
-```
+- Shorter sequences are linearly interpolated.
+- Longer sequences are uniformly resampled.
+- Sequences of exactly 50 samples remain unchanged.
 
-### Виправлення проблем автоматично
+This ensures consistent model input dimensions.
 
-```bash
-ruff check app tests --fix
-```
+---
 
-### Рекомендації
+# Testing
 
-- Виконуйте `ruff` разом із `pytest` перед комітом.
-- Додайте `ruff` до CI/CD для автоматичної перевірки якості коду.
-
-## Тестування
-
-### Запуск всіх тестів
+Run all tests
 
 ```bash
 pytest
 ```
 
-### Запуск з покриттям
+Run with coverage
 
 ```bash
 pytest --cov=app --cov-report=html
 ```
 
-### Запуск специфічних тестів
+Run unit tests
 
 ```bash
-# Unit тести
 pytest tests/unit/
+```
 
-# Інтеграційні тести
+Run integration tests
+
+```bash
 pytest tests/integration/
+```
 
-# Конкретний файл тестів
+Run a specific test
+
+```bash
 pytest tests/unit/test_models.py
 ```
 
-### Запуск через shell скрипт
+---
+
+# Linting
+
+The project uses **Ruff** for linting and formatting.
+
+Check the code
 
 ```bash
-bash run_tests.sh
+ruff check app tests
 ```
 
-## Структура проєкту
+Automatically fix issues
+
+```bash
+ruff check app tests --fix
+```
+
+---
+
+# Project Structure
 
 ```
 smart-glove-ml/
+│
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                      # FastAPI приложение
-│   ├── models.py                    # Дата-класи і утиліти
-│   ├── prediction_service.py        # Сервіс прогнозів
-│   ├── training_service.py          # Сервіс тренування
-│   ├── rabbitmq_service.py          # Інтеграція RabbitMQ
-│   └── storages.py                  # Робота зі сховищами
+│   ├── main.py
+│   ├── models.py
+│   ├── prediction_service.py
+│   ├── training_service.py
+│   ├── rabbitmq_service.py
+│   └── storages.py
+│
 ├── tests/
-│   ├── unit/                        # Unit тести
-│   │   ├── test_main.py
-│   │   ├── test_models.py
-│   │   ├── test_prediction_service.py
-│   │   ├── test_rabbitmq_service.py
-│   │   ├── test_training_service.py
-│   │   └── test_storages.py
-│   ├── integration/                 # Інтеграційні тести
-│   │   └── test_backend_api.py
-│   └── conftest.py                  # Pytest конфігурація
+│   ├── unit/
+│   ├── integration/
+│   └── conftest.py
+│
 ├── data/
-│   ├── excuse-me.json              # Приклади даних
-│   └── gestures_merged.json        # Об'єднані дані жестів
+│
 ├── start_docker/
-│   └── docker-compose.yml          # Конфігурація Docker Compose
+│
 ├── start_server/
-│   ├── start_server.sh             # Shell скрипт запуску
-│   └── start_server.ps1            # PowerShell скрипт запуску
-├── Dockerfile                       # Конфігурація Docker
-├── requirements.txt                 # Залежності проєкту
-├── requirements_dev.txt             # Залежності розробки
-├── pytest.ini                       # Конфігурація pytest
-├── run_tests.sh                     # Скрипт для запуску тестів
-└── README.md                        # Цей файл
+│
+├── Dockerfile
+├── requirements.txt
+├── requirements_dev.txt
+├── pytest.ini
+├── run_tests.sh
+└── README.md
 ```
 
-## Docker
+---
 
-### Побудова образу
+# Docker
+
+Build the image
 
 ```bash
-docker build -t smart-glove-ml:latest .
+docker build -t smart-glove-ml .
 ```
 
-### Docker Compose
-
-Для запуску всієї системи (ML сервіс + RabbitMQ + MinIO + MongoDB):
+Run using Docker Compose
 
 ```bash
 cd start_docker
+
 docker-compose up -d
 ```
 
-Сервіси будуть доступні за адресами:
+Services:
 
-- **Smart Glove ML API**: http://localhost:8000
-- **Smart Glove Backend**: http://localhost:8080
-- **RabbitMQ Management**: http://localhost:15672
-- **MinIO Web UI**: http://localhost:9001
-- **MongoDB**: localhost:27018
+| Service | URL |
+|----------|-----|
+| Smart Glove ML | http://localhost:8000 |
+| Smart Glove Backend | http://localhost:8080 |
+| RabbitMQ Management | http://localhost:15672 |
+| MinIO Console | http://localhost:9001 |
+| MongoDB | localhost:27018 |
 
-## Нормалізація послідовностей
+---
 
-Сервіс автоматично нормалізує послідовності датчиків до фіксованої довжини (50 точок):
-
-- **Якщо даних менше** → інтерполяція лінійна інтерполяція
-- **Якщо даних більше** → рівномірний вибір точок
-- **Якщо точно 50** → без змін
-
-Це забезпечує консистентність вхідних даних для моделей.
-
-## Приклад роботи з API
+# Example API Request
 
 ```python
 import requests
-import json
 
-# Дані з датчиків жесту
-gesture_data = [
-    [1.0, 2.0, 3.0, 4.0, 5.0],
-    [1.1, 2.1, 3.1, 4.1, 5.1],
-    # ... більше точок
+gesture = [
+    [1.0, 2.0, 3.0],
+    [1.1, 2.1, 3.1],
 ]
 
-# Запит на прогноз
 response = requests.post(
     "http://localhost:8000/predict",
     json={
         "modelId": "model_123",
-        "rawData": gesture_data
+        "rawData": gesture
     }
 )
 
-result = response.json()
-print(f"Прогноз: {result['predictedLabel']}")
-print(f"Впевненість: {result['confidence']:.2%}")
+prediction = response.json()
+
+print(prediction["predictedLabel"])
+print(prediction["confidence"])
 ```
 
-## Розробка
+---
 
-### Додавання нових залежностей
+# Development
+
+Install a new dependency
 
 ```bash
-# Встановіть пакет
-pip install new-package
+pip install package-name
+```
 
-# Оновіть requirements.txt
+Update requirements
+
+```bash
 pip freeze > requirements.txt
 ```
 
-## Ліцензія
+Before creating a pull request, it is recommended to run:
 
-MIT License
+```bash
+ruff check app tests
+pytest
+```
 
-## Автор
+---
 
-Проєкт розроблений як частина навчальної роботи на 6-му семестрі.
+# License
+
+This project is licensed under the MIT License.
+
+---
+
+# Author
+
+Developed as part of the **Smart Glove** project and coursework at **Lviv Polytechnic National University**.

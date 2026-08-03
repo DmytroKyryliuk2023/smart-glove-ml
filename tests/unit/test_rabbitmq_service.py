@@ -1,6 +1,8 @@
-import pytest
 import json
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
+
 from app.rabbitmq_service import RabbitMQService
 
 

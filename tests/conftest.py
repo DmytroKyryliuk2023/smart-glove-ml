@@ -8,7 +8,6 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.models import Sequential
 
-
 env_path = Path(__file__).parent.parent / "start_docker" / ".env"
 load_dotenv(dotenv_path=env_path)
 

@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import Mock, patch
+
 import numpy as np
+import pytest
+
 from app.storages import ModelMinIOStorage
 
 

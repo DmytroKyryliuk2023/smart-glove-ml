@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+
 from app import models
 
 
@@ -45,8 +46,8 @@ def test_gesture_data_validation():
 
 def test_model_dataclass():
     """Test Model dataclass creation"""
-    from tensorflow.keras.models import Sequential
     from sklearn.preprocessing import MinMaxScaler
+    from tensorflow.keras.models import Sequential
     
     mock_model = Sequential()
     mock_scaler = MinMaxScaler()

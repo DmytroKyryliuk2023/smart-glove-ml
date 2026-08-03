@@ -6,7 +6,7 @@
 
 Machine Learning service for Smart Glove gesture recognition. This project provides a FastAPI-based backend that trains TensorFlow/Keras models and performs real-time gesture classification using sensor data collected from a smart glove.
 
-The service is designed as part of a distributed Smart Glove system and integrates with external services such as RabbitMQ, MinIO, MongoDB, and the Smart Glove Backend.
+The service is designed as part of a distributed Smart Glove system and integrates with external services such as RabbitMQ, MinIO, and the Smart Glove Backend.
 
 ---
 
@@ -45,7 +45,7 @@ The service provides:
 - Asynchronous training using RabbitMQ
 - REST API built with FastAPI
 
-Unlike the previous standalone Flask prototype, this service is designed as a scalable microservice that communicates with other backend components.
+This service is designed as a scalable microservice that communicates with other backend components.
 
 ---
 

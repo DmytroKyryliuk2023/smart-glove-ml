@@ -1,9 +1,9 @@
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, AsyncMock, patch
 
-from app.main import app, local_models, lifespan
-
+from app.main import app, lifespan, local_models
 
 client = TestClient(app)
 

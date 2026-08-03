@@ -14,6 +14,12 @@ from .storages import ModelMinIOStorage
 class TrainingService:
     SEQUENCE_LENGTH = 50
     EXPECTED_COLUMNS = 18
+    timeout = httpx.Timeout(
+        connect=5.0,   # 5 секунд на встановлення з'єднання
+        read=30.0,     # 30 секунд на читання даних
+        write=10.0,    # 10 секунд на запис
+        pool=5.0       # 5 секунд на очікування з'єднання з пулу
+    )
 
     def __init__(
         self,
@@ -34,7 +40,7 @@ class TrainingService:
         self.server_endpoint = server_endpoint
 
     async def fetch_training_data(self, model_id: str):
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             url = f"{self.server_endpoint}/api/v1/internal/models/{model_id}/training-data"
             response = await client.get(url)
             response.raise_for_status()

@@ -42,12 +42,12 @@ async def test_train_model_success(training_data):
 async def test_actual_training_with_valid_data(training_data):
     """Test actual training with valid data"""
     service = TrainingService("localhost:9000", "key", "secret", "http://server")
-    service.storage = Mock()
-    service.storage.save_model = AsyncMock()
+    service.storage_service = Mock()
+    service.storage_service.save_model = AsyncMock()
 
     await service._actual_training("test_id", training_data)
 
-    service.storage.save_model.assert_called_once()
+    service.storage_service.save_model.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -76,9 +76,9 @@ async def test_actual_training_with_invalid_column_count():
 
 def test_expected_columns_constant():
     """Test EXPECTED_COLUMNS constant"""
-    assert TrainingService.EXPECTED_COLUMNS == 18
+    assert TrainingService.num_features == 18
 
 
 def test_sequence_length_constant():
     """Test SEQUENCE_LENGTH constant"""
-    assert TrainingService.SEQUENCE_LENGTH == 50
+    assert TrainingService.sequence_length == 50

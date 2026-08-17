@@ -3,7 +3,9 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.models import Sequential
 
 
@@ -18,10 +20,7 @@ class GestureService:
         self.sequence_length = sequence_length
         self.num_features = num_features
         self.local_models: dict[str, GestureService.Model] = {}
-
-    async def predict(self, model: Model, gesture_data: list):
-        return await asyncio.to_thread(self._predict_sync, model, gesture_data)
-
+        
     def resample_sequence(self, df: pd.DataFrame, target_length: int) -> pd.DataFrame:
         """
         Adjusts the number of rows in the DataFrame to target_length.
@@ -52,6 +51,9 @@ class GestureService:
         else:
             return df
 
+    async def predict(self, model: Model, gesture_data: list):
+        return await asyncio.to_thread(self._predict_sync, model, gesture_data)
+
     def _predict_sync(self, model: Model, gesture_data: list):
         df = pd.DataFrame(gesture_data)
         df_resampled = self.resample_sequence(df, self.sequence_length)
@@ -66,3 +68,99 @@ class GestureService:
         confidence = np.max(prediction_probs)
 
         return {"predictedLabel": predicted_label, "confidence": float(confidence)}
+
+    async def train(self, training_data: dict) -> Model:
+        return await asyncio.to_thread(self._train_sync, training_data)
+
+    def _train_sync(self, gestures: dict) -> Model:
+        if not gestures:
+            raise Exception("Отримано порожні дані для тренування")
+
+        model = GestureService.Model(model=None, scaler=None, classes=None)
+        samples, labels = [], []
+
+        for label, sequences in gestures.items():
+            for seq in sequences:
+                df = pd.DataFrame(seq)
+                if df.shape[1] != self.num_features:
+                    print(
+                        f"Пропускаю {label} — неправильна кількість колонок {df.shape[1]}"
+                    )
+                    continue
+
+                df_resampled = GestureService.resample_sequence(
+                    df, self.sequence_length
+                )
+                if df_resampled.shape != (self.sequence_length, self.num_features):
+                    print(
+                        f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}"
+                    )
+                    continue
+
+                samples.append(df_resampled.values.astype(float))
+                labels.append(label)
+
+        if len(samples) == 0:
+            raise Exception("Немає валідних даних для тренування")
+
+        samples, labels = np.array(samples), np.array(labels)
+
+        encoder = LabelEncoder()
+        y = encoder.fit_transform(labels)
+        model.classes = encoder.classes_
+
+        _, counts = np.unique(y, return_counts=True)
+        if np.any(counts < 2):
+            raise Exception("Кожен клас повинен мати мінімум 2 приклади")
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            samples,
+            y,
+            test_size=0.2,
+            random_state=42,
+            stratify=y,
+        )
+
+        model.scaler = MinMaxScaler(feature_range=(-1, 1))
+        N_train, T, F = X_train.shape
+        N_test = X_test.shape[0]
+
+        X_train_2d = X_train.reshape(-1, F)
+        X_test_2d = X_test.reshape(-1, F)
+
+        model.scaler.fit(X_train_2d)
+        X_train_scaled = model.scaler.transform(X_train_2d).reshape(N_train, T, F)
+        X_test_scaled = np.clip(
+            model.scaler.transform(X_test_2d).reshape(N_test, T, F), -1, 1
+        )
+
+        model.model = Sequential(
+            [
+                Input(shape=(T, F)),
+                LSTM(32, return_sequences=False),
+                Dropout(0.3),
+                Dense(64, activation="relu"),
+                Dropout(0.2),
+                Dense(len(np.unique(y)), activation="softmax"),
+            ]
+        )
+
+        model.model.compile(
+            optimizer="adam",
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+
+        model.model.fit(
+            X_train_scaled,
+            y_train,
+            validation_data=(X_test_scaled, y_test),
+            epochs=30,
+            batch_size=16,
+            verbose=1,
+        )
+
+        _, test_accuracy = model.model.evaluate(X_test_scaled, y_test, verbose=0)
+        print(f"Точність моделі на тестових даних: {test_accuracy * 100:.2f}%")
+
+        return model

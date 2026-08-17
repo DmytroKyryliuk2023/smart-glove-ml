@@ -4,12 +4,13 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, WebSocket, status
-from gesture_detection_service import GestureDetectionService
 
 from . import models
 from .division_service import DivisionService
+from .gesture_detection_service import GestureDetectionService
 from .gesture_service import GestureService
 from .rabbitmq_service import RabbitMQService
+from .storage_service import MinioStorage
 from .training_service import TrainingService
 
 RABBIT_URL = os.getenv("RABBITMQ_URL")
@@ -17,6 +18,8 @@ MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 SERVER_ENDPOINT = os.getenv("SERVER_ENDPOINT")
+
+MINIO_BUCKET_NAME = "models"
 
 SEQUENCE_LENGTH = 50
 NUM_FEATURES = 18
@@ -28,13 +31,21 @@ CONFIDENCE_THRESHOLD = 0.7
 WINDOW_SIZE = 223
 
 rabbitmq = RabbitMQService(RABBIT_URL)
-training_service = TrainingService(
+storage_service = MinioStorage(
     minio_endpoint=MINIO_ENDPOINT,
     minio_access_key=MINIO_ACCESS_KEY,
     minio_secret_key=MINIO_SECRET_KEY,
+    bucket_name=MINIO_BUCKET_NAME,
+)
+training_service = TrainingService(
+    sequence_length=SEQUENCE_LENGTH,
+    num_features=NUM_FEATURES,
+    storage_service=storage_service,
     server_endpoint=SERVER_ENDPOINT,
 )
-gesture_service = GestureService(sequence_length=50)
+gesture_service = GestureService(
+    sequence_length=SEQUENCE_LENGTH, num_features=NUM_FEATURES
+)
 division_service = DivisionService(
     confidence_threshold=CONFIDENCE_THRESHOLD,
     window_size=WINDOW_SIZE,
@@ -54,7 +65,7 @@ async def process_message(message):
             body = json.loads(message.body.decode())
             model_id = body.get("modelId")
 
-            await training_service.train_model(model_id)
+            await training_service.train_gesture_model(gesture_service, model_id)
 
             result = {"modelId": model_id, "status": "SUCCESS", "errorMessage": None}
             await rabbitmq.publish_result("train_results_queue", result)
@@ -92,7 +103,7 @@ async def init_gesture_model(model_id: str):
 
         gesture_service.local_models[
             model_id
-        ] = await training_service.storage.load_model(model_id)
+        ] = await storage_service.load_gesture_model(model_id)
         print(f"Gesture model {model_id} loaded into memory")
         return {"message": "Gesture model initialized successfully"}
     except Exception as e:
@@ -121,9 +132,9 @@ async def init_division_model(model_id: str = "default"):
         if model_id in division_service.local_models:
             return {"message": "Division model already initialized"}
 
-        division_service.local_models[model_id] = await training_service.storage.load_model(
+        division_service.local_models[
             model_id
-        )
+        ] = await storage_service.load_division_model(model_id)
         print(f"Division model {model_id} loaded into memory")
         return {"message": "Division model initialized successfully"}
     except Exception as e:

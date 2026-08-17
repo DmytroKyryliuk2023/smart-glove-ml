@@ -7,7 +7,7 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.models import Sequential
 
-from . import models
+from .gesture_service import GestureService
 from .storages import ModelMinIOStorage
 
 
@@ -15,10 +15,10 @@ class TrainingService:
     SEQUENCE_LENGTH = 50
     EXPECTED_COLUMNS = 18
     timeout = httpx.Timeout(
-        connect=5.0,   # 5 секунд на встановлення з'єднання
-        read=30.0,     # 30 секунд на читання даних
-        write=10.0,    # 10 секунд на запис
-        pool=5.0       # 5 секунд на очікування з'єднання з пулу
+        connect=5.0,  # 5 секунд на встановлення з'єднання
+        read=30.0,  # 30 секунд на читання даних
+        write=10.0,  # 10 секунд на запис
+        pool=5.0,  # 5 секунд на очікування з'єднання з пулу
     )
 
     def __init__(
@@ -57,7 +57,7 @@ class TrainingService:
         if not gestures:
             raise Exception("Отримано порожні дані для тренування")
 
-        model = models.Model(model=None, scaler=None, classes=None)
+        model = GestureService.Model(model=None, scaler=None, classes=None)
         samples, labels = [], []
 
         for label, sequences in gestures.items():
@@ -69,7 +69,9 @@ class TrainingService:
                     )
                     continue
 
-                df_resampled = models.resample_sequence(df, self.SEQUENCE_LENGTH)
+                df_resampled = GestureService.resample_sequence(
+                    df, self.SEQUENCE_LENGTH
+                )
                 if df_resampled.shape != (self.SEQUENCE_LENGTH, self.EXPECTED_COLUMNS):
                     print(
                         f"Пропускаю {label} після ресемплінгу — отримано {df_resampled.shape}"

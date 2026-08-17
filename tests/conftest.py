@@ -36,7 +36,7 @@ def sample_model():
     scaler = MinMaxScaler()
     scaler.fit(np.random.rand(100, 18))
 
-    from app.models import Model
+    from app.GestureService import Model
 
     return Model(
         model=model, scaler=scaler, classes=np.array(["class1", "class2", "class3"])

@@ -148,7 +148,7 @@ async def delete_division_model(model_id: str = "default"):
 
 @app.post("/predict/gesture")
 async def predict_gesture(gesture: models.GesturePredictionData):
-    gesture_model_id, gesture_data = gesture.gestureModelId, gesture.rawData
+    gesture_model_id, gesture_data = gesture.ModelId, gesture.rawData
 
     if gesture_model_id not in gesture_service.local_models:
         raise HTTPException(

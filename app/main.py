@@ -34,12 +34,12 @@ training_service = TrainingService(
     minio_secret_key=MINIO_SECRET_KEY,
     server_endpoint=SERVER_ENDPOINT,
 )
+gesture_service = GestureService(sequence_length=50)
 division_service = DivisionService(
     confidence_threshold=CONFIDENCE_THRESHOLD,
     window_size=WINDOW_SIZE,
     num_features=NUM_FEATURES,
 )
-gesture_service = GestureService(sequence_length=50)
 gesture_detection_service = GestureDetectionService(
     division_service=division_service,
     gesture_service=gesture_service,
@@ -235,8 +235,8 @@ async def predict_sequence(
                 detected_ends,
                 should_break,
             ) = await gesture_detection_service.process_window(
-                division_model,
                 gesture_model,
+                division_model,
                 stream,
                 detected_starts,
                 detected_ends,

@@ -58,8 +58,8 @@ class GestureDetectionService:
 
     async def process_window(
         self,
-        div_model: DivisionService.Model,
         gesture_model: GestureService.Model,
+        division_model: DivisionService.Model,
         stream: List[List[float]],
         detected_starts: List[int],
         detected_ends: List[int],
@@ -81,7 +81,7 @@ class GestureDetectionService:
         window_data = np.array(stream[-DivisionService.WINDOW :])
 
         detected_start, detected_end = await self.division_service.predict(
-            div_model, window_data, left
+            division_model, window_data, left
         )
 
         if detected_start is not None:

@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from app.prediction_service import PredictionService
+from app.gesture_service import PredictionService
 
 
 @pytest.mark.asyncio

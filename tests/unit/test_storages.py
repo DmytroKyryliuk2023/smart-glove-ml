@@ -3,13 +3,13 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
-from app.storages import ModelMinIOStorage
+from app.storage_service import MinioStorage
 
 
 @pytest.mark.asyncio
 async def test_save_model(mock_minio_client, sample_model):
     """Test saving model to MinIO"""
-    storage = ModelMinIOStorage(mock_minio_client, "test-bucket")
+    storage = MinioStorage(mock_minio_client, "test-bucket")
 
     with patch("app.storages.tempfile.TemporaryDirectory") as mock_tempdir:
         mock_tempdir.return_value.__enter__.return_value = "/tmp/test"
@@ -18,7 +18,7 @@ async def test_save_model(mock_minio_client, sample_model):
             with patch("app.storages.joblib.dump"):
                 with patch("app.storages.np.save"):
                     with patch("os.path.exists", return_value=True):
-                        await storage.save_model("test_id", sample_model)
+                        await storage.save_gesture_model("test_id", sample_model)
 
                         assert mock_minio_client.fput_object.call_count == 3
 
@@ -26,7 +26,7 @@ async def test_save_model(mock_minio_client, sample_model):
 @pytest.mark.asyncio
 async def test_load_model(mock_minio_client):
     """Test loading model from MinIO"""
-    storage = ModelMinIOStorage(mock_minio_client, "test-bucket")
+    storage = MinioStorage(mock_minio_client, "test-bucket")
 
     with patch("app.storages.tempfile.TemporaryDirectory") as mock_tempdir:
         mock_tempdir.return_value.__enter__.return_value = "/tmp/test"
@@ -44,7 +44,7 @@ async def test_load_model(mock_minio_client):
 
                     mock_minio_client.fget_object = mock_fget_object
 
-                    result = await storage.load_model("test_id")
+                    result = await storage.load_gesture_model("test_id")
 
                     assert result is not None
 
@@ -54,7 +54,7 @@ def test_bucket_creation_on_init():
     mock_client = Mock()
     mock_client.bucket_exists.return_value = False
 
-    ModelMinIOStorage(mock_client, "new-bucket")
+    MinioStorage(mock_client, "new-bucket")
 
     mock_client.make_bucket.assert_called_once_with("new-bucket")
 
@@ -64,6 +64,6 @@ def test_bucket_exists_on_init():
     mock_client = Mock()
     mock_client.bucket_exists.return_value = True
 
-    ModelMinIOStorage(mock_client, "existing-bucket")
+    MinioStorage(mock_client, "existing-bucket")
 
     mock_client.make_bucket.assert_not_called()

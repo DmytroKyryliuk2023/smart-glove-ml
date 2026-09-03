@@ -4,8 +4,8 @@ import tempfile
 
 import joblib
 import numpy as np
+import tensorflow as tf
 from minio import Minio
-from tensorflow.keras.models import load_model, save_model
 
 from .division_service import DivisionService
 from .gesture_service import GestureService
@@ -40,7 +40,7 @@ class MinioStorage:
                 scaler_path = os.path.join(tmpdir, "scaler.pkl")
                 classes_path = os.path.join(tmpdir, "classes.npy")
 
-                save_model(model.model, model_path)
+                tf.keras.models.save_model(model.model, model_path)
                 joblib.dump(model.scaler, scaler_path)
                 np.save(classes_path, model.classes)
 
@@ -74,7 +74,7 @@ class MinioStorage:
                     self.bucket_name, f"gesture/labels_{model_id}.npy", classes_path
                 )
 
-                keras_model = load_model(model_path)
+                keras_model = tf.keras.models.load_model(model_path)
                 scaler = joblib.load(scaler_path)
                 classes = np.load(classes_path, allow_pickle=True)
 
@@ -90,7 +90,7 @@ class MinioStorage:
                 model_path = os.path.join(tmpdir, "model.keras")
                 scaler_path = os.path.join(tmpdir, "scaler.pkl")
 
-                save_model(model.model, model_path)
+                tf.keras.models.save_model(model.model, model_path)
                 joblib.dump(model.scaler, scaler_path)
 
                 self.client.fput_object(
@@ -116,7 +116,7 @@ class MinioStorage:
                     self.bucket_name, f"division/scaler_{model_id}.pkl", scaler_path
                 )
 
-                keras_model = load_model(model_path)
+                keras_model = tf.keras.models.load_model(model_path)
                 scaler = joblib.load(scaler_path)
 
                 return DivisionService.Model(

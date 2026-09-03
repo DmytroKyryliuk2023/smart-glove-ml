@@ -2,14 +2,14 @@ import asyncio
 from dataclasses import dataclass
 
 import numpy as np
+import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
 
 
 class DivisionService:
     @dataclass
     class Model:
-        model: Sequential
+        model: tf.keras.models.Sequential
         scaler: MinMaxScaler
 
     def __init__(self, confidence_threshold, window_size: int, num_features: int):

@@ -3,16 +3,15 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
-from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
-from tensorflow.keras.models import Sequential
 
 
 class GestureService:
     @dataclass
     class Model:
-        model: Sequential
+        model: tf.keras.models.Sequential
         scaler: MinMaxScaler
         classes: np.ndarray
 
@@ -134,14 +133,14 @@ class GestureService:
             model.scaler.transform(X_test_2d).reshape(N_test, T, F), -1, 1
         )
 
-        model.model = Sequential(
+        model.model = tf.keras.models.Sequential(
             [
-                Input(shape=(T, F)),
-                LSTM(32, return_sequences=False),
-                Dropout(0.3),
-                Dense(64, activation="relu"),
-                Dropout(0.2),
-                Dense(len(np.unique(y)), activation="softmax"),
+                tf.keras.layers.Input(shape=(T, F)),
+                tf.keras.layers.LSTM(32, return_sequences=False),
+                tf.keras.layers.Dropout(0.3),
+                tf.keras.layers.Dense(64, activation="relu"),
+                tf.keras.layers.Dropout(0.2),
+                tf.keras.layers.Dense(len(np.unique(y)), activation="softmax"),
             ]
         )
 

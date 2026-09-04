@@ -215,3 +215,4 @@ __marimo__/
 # Private files
 як запустити.txt
 *.jar
+run_tests.sh

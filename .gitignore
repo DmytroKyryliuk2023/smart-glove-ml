@@ -216,3 +216,4 @@ __marimo__/
 як запустити.txt
 *.jar
 run_tests.sh
+data/division/data/*.csv

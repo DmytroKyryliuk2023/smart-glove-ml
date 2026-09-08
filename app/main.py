@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 from contextlib import asynccontextmanager
 
@@ -30,19 +29,6 @@ MIN_GESTURE_LENGTH = 100
 CONFIDENCE_THRESHOLD = 0.7
 WINDOW_SIZE = 223
 
-rabbitmq = RabbitMQService(RABBIT_URL)
-storage_service = MinioStorage(
-    minio_endpoint=MINIO_ENDPOINT,
-    minio_access_key=MINIO_ACCESS_KEY,
-    minio_secret_key=MINIO_SECRET_KEY,
-    bucket_name=MINIO_BUCKET_NAME,
-)
-training_service = TrainingService(
-    sequence_length=SEQUENCE_LENGTH,
-    num_features=NUM_FEATURES,
-    storage_service=storage_service,
-    server_endpoint=SERVER_ENDPOINT,
-)
 gesture_service = GestureService(
     sequence_length=SEQUENCE_LENGTH, num_features=NUM_FEATURES
 )
@@ -52,34 +38,24 @@ division_service = DivisionService(
     num_features=NUM_FEATURES,
 )
 gesture_detection_service = GestureDetectionService(
-    division_service=division_service,
     gesture_service=gesture_service,
+    division_service=division_service,
     close_points_threshold=CLOSE_POINTS_THRESHOLD,
     min_gesture_length=MIN_GESTURE_LENGTH,
 )
-
-
-async def process_message(message):
-    async with message.process():
-        try:
-            body = json.loads(message.body.decode())
-            model_id = body.get("modelId")
-
-            await training_service.train_gesture_model(gesture_service, model_id)
-
-            result = {"modelId": model_id, "status": "SUCCESS", "errorMessage": None}
-            await rabbitmq.publish_result("train_results_queue", result)
-
-        except Exception as e:
-            error_message = str(e)
-            print(f"Consumer error: {e}")
-
-            result = {
-                "modelId": body.get("modelId"),
-                "status": "FAILED",
-                "errorMessage": error_message,
-            }
-            await rabbitmq.publish_result("train_results_queue", result)
+rabbitmq = RabbitMQService(RABBIT_URL)
+storage_service = MinioStorage(
+    minio_endpoint=MINIO_ENDPOINT,
+    minio_access_key=MINIO_ACCESS_KEY,
+    minio_secret_key=MINIO_SECRET_KEY,
+    bucket_name=MINIO_BUCKET_NAME,
+)
+training_service = TrainingService(
+    rabbitmq=rabbitmq,
+    gesture_service=gesture_service,
+    storage_service=storage_service,
+    server_endpoint=SERVER_ENDPOINT,
+)
 
 
 @asynccontextmanager
@@ -87,7 +63,12 @@ async def lifespan(app: FastAPI):
     await rabbitmq.connect()
     await rabbitmq.declare_queue("train_tasks_queue")
     await rabbitmq.declare_queue("train_results_queue")
-    asyncio.create_task(rabbitmq.start_consuming("train_tasks_queue", process_message))
+    asyncio.create_task(
+        rabbitmq.start_consuming(
+            "train_tasks_queue", 
+            training_service.process_message
+        )
+    )
     yield
     await rabbitmq.close()
 

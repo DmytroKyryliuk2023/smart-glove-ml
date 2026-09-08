@@ -16,13 +16,13 @@ class GestureDetectionService:
 
     def __init__(
         self,
-        division_service: DivisionService,
         gesture_service: GestureService,
+        division_service: DivisionService,
         close_points_threshold: int = 30,
         min_gesture_length: int = 100,
     ):
-        self.division_service = division_service
         self.gesture_service = gesture_service
+        self.division_service = division_service
         self.close_points_threshold = close_points_threshold
         self.min_gesture_length = min_gesture_length
 
